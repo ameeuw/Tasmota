@@ -958,7 +958,7 @@ if (download) {
   UfsData.download_busy = true;
   char *path = (char*)malloc(128);
   strcpy(path,file);
-  BaseType_t ret = xTaskCreatePinnedToCore(donload_task, "DT", 6000, (void*)path, 3, nullptr, 1);
+  BaseType_t ret = xTaskCreatePinnedToCore(download_task, "DT", 6000, (void*)path, 3, nullptr, 1);
   if (ret != pdPASS)
     AddLog(LOG_LEVEL_INFO, PSTR("UFS: Download task failed with %d"), ret);
   yield();
@@ -972,7 +972,7 @@ if (download) {
 #ifndef DOWNLOAD_SIZE
 #define DOWNLOAD_SIZE 4096
 #endif // DOWNLOAD_SIZE
-void donload_task(void *path) {
+void download_task(void *path) {
   File download_file;
   WiFiClient download_Client;
   char *file = (char*) path;
