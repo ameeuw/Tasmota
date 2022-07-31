@@ -677,6 +677,17 @@ void UfsDirectory(void) {
     }
   }
 
+  if (Webserver->hasArg(F("open"))) {
+    String stmp = Webserver->arg(F("open"));
+    char *cp = (char *)stmp.c_str();
+    if (UfsOpenFile(cp, false)) {
+      // is directory
+      strcpy(ufs_path, cp);
+    } else {
+      return;
+    }
+  }
+
   if (Webserver->hasArg(F("dir"))) {
     String stmp = Webserver->arg(F("dir"));
     ufs_dir = atoi(stmp.c_str());
@@ -836,7 +847,17 @@ void UfsListDir(char *path, uint8_t depth) {
 #define ESP32_DOWNLOAD_TASK
 #endif // ESP32
 
+bool checkFileExtension(const char *filename, const char *extension, size_t padding) {
+  size_t filenameLength = strlen(filename);
+  size_t extensionLength = strlen(extension);
+  return (strncmp(&filename[filenameLength - padding - extensionLength], extension, extensionLength) == 0);
+}
+
 uint8_t UfsDownloadFile(char *file) {
+  return UfsOpenFile(file, true);
+}
+
+uint8_t UfsOpenFile(char *file, bool download) {
   File download_file;
 
   if (!dfsp->exists(file)) {
@@ -870,8 +891,36 @@ uint8_t UfsDownloadFile(char *file) {
       break;
     }
   }
-  snprintf_P(attachment, sizeof(attachment), PSTR("attachment; filename=%s"), cp);
-  Webserver->sendHeader(F("Content-Disposition"), attachment);
+
+if (download) {
+    // Actual download option does need any further content description...
+    snprintf_P(attachment, sizeof(attachment), PSTR("attachment; filename=%s"), cp);
+    Webserver->sendHeader(F("Content-Disposition"), attachment);
+  } else {
+    // Opening a file is a bit more intricate so let's implement some header setting:
+    snprintf_P(attachment, sizeof(attachment), PSTR("inline; filename=%s"), cp);
+
+    size_t padding = 0;
+    // We start with checking for ".gz"
+    // gzip header is based on the ending-ending and can occur in additionally
+    if (checkFileExtension(cp, ".gz", 0)) {
+      Webserver->sendHeader(F("Content-Encoding"), F("gzip"));
+      padding = 3;
+    } 
+    
+    if (checkFileExtension(cp, ".txt", padding)) {
+      Webserver->sendHeader(F("Content-Type"), F("text/plain"));
+    } else if (checkFileExtension(cp, ".html", padding) ||
+             checkFileExtension(cp, ".htm", padding)) {
+      Webserver->sendHeader(F("Content-Type"), F("text/html"));
+    } else if (checkFileExtension(cp, ".jpeg", padding) ||
+             checkFileExtension(cp, ".jpg", padding)) {
+      Webserver->sendHeader(F("Content-Type"), F("image/jpeg"));
+    } else if (checkFileExtension(cp, ".json", padding)) {
+      Webserver->sendHeader(F("Content-Type"), F("application/json"));
+    }
+  }
+
   WSSend(200, CT_APP_STREAM, "");
 
   uint8_t buff[512];
