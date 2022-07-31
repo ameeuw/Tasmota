@@ -627,9 +627,11 @@ const char UFS_FORM_SDC_DIR_HIDDABLE[] PROGMEM =
 const char UFS_FORM_SDC_DIRd[] PROGMEM =
   "<pre><a href='%s' file='%s'>%s</a></pre>";
 const char UFS_FORM_SDC_DIRb[] PROGMEM =
-  "<pre%s><a href='%s' file='%s'>%s</a> %s %8d %s %s</pre>";
-const char UFS_FORM_SDC_HREF[] PROGMEM =
-  "ufsd?download=%s/%s";
+  "<pre%s><a href='%s' file='%s' target='_blank'>%s</a> %s %8d %s %s %s</pre>";
+const char UFS_FORM_SDC_HREFopen[] PROGMEM =
+  "ufsd?open=%s/%s";
+const char UFS_FORM_SDC_HREFdown[] PROGMEM =
+  "<a href='ufsd?download=%s/%s'>&#11015;</a>"; // ⬇️
 
 #ifdef GUI_TRASH_FILE
 const char UFS_FORM_SDC_HREFdel[] PROGMEM =
@@ -807,7 +809,7 @@ void UfsListDir(char *path, uint8_t depth) {
 
       sprintf(cp, format, ep);
       if (entry.isDirectory()) {
-        ext_snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, pp, ep);
+        ext_snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREFopen, pp, ep);
         WSContentSend_P(UFS_FORM_SDC_DIRd, npath, ep, name);
         uint8_t plen = strlen(path);
         if (plen > 1) {
@@ -817,6 +819,8 @@ void UfsListDir(char *path, uint8_t depth) {
         UfsListDir(path, depth + 4);
         path[plen] = 0;
       } else {
+        char downpath[128];
+        ext_snprintf_P(downpath, sizeof(downpath), UFS_FORM_SDC_HREFdown, pp, ep);        
 #ifdef GUI_TRASH_FILE
         char delpath[128];
         ext_snprintf_P(delpath, sizeof(delpath), UFS_FORM_SDC_HREFdel, pp, ep);
@@ -831,8 +835,8 @@ void UfsListDir(char *path, uint8_t depth) {
         char editpath[2];
         editpath[0]=0;
 #endif // GUI_TRASH_FILE
-        ext_snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, pp, ep);
-        WSContentSend_P(UFS_FORM_SDC_DIRb, hiddable ? UFS_FORM_SDC_DIR_HIDDABLE : UFS_FORM_SDC_DIR_NORMAL, npath, ep, name, tstr.c_str(), entry.size(), delpath, editpath);
+        ext_snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREFopen, pp, ep);
+        WSContentSend_P(UFS_FORM_SDC_DIRb, hiddable ? UFS_FORM_SDC_DIR_HIDDABLE : UFS_FORM_SDC_DIR_NORMAL, npath, ep, name, tstr.c_str(), entry.size(), downpath, delpath, editpath);
       }
       entry.close();
     }
