@@ -140,6 +140,7 @@ TFL_stats_t *stats = nullptr;
 };
 
 TFL_ctx_t *TFL = nullptr;
+uint8_t *tensor_arena = nullptr;
 RingbufHandle_t TFL_log_buffer = nullptr;
 
 
@@ -180,6 +181,8 @@ bool TFL_init_CAM(){
     AddLog(LOG_LEVEL_DEBUG, PSTR("TFL: mode webcam not implemented yet"));
     delete TFL;
     TFL = nullptr;
+    free(tensor_arena);
+    tensor_arena = nullptr;
     return bfalse;
 }
 
@@ -425,6 +428,8 @@ void TFL_delete_tasks(){
 #endif //USE_I2S
   delete TFL;
   TFL = nullptr;
+  tensor_arene = nullptr;
+  free(tensor_arena);
 }
 
 /**
@@ -433,7 +438,7 @@ void TFL_delete_tasks(){
  * @param pvParameters - not used
  */
 void TFL_task_loop(void *pvParameters){
-  uint8_t *tensor_arena = (uint8_t *)heap_caps_malloc(TFL->TensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  tensor_arena = (uint8_t *)heap_caps_malloc(TFL->TensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   TFL->stats = new TFL_stats_t;
   tflite::AllOpsResolver resolver; //TODO: infer needed Ops from model??
   tflite::MicroInterpreter interpreter(
