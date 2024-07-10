@@ -167,7 +167,7 @@ bool TFL_create_task(){
     xTaskCreatePinnedToCore(
     TFL_task_loop,                /* Function to implement the task */
     "tfl_loop",                   /* Name of the task */
-    8000 + (TFL->TensorArenaSize),/* Stack size in words */
+    8000,                         /* Stack size in words */
     NULL,                         /* Task input parameter */
     1,                            /* Priority of the task */
     &TFL->loop_task,              /* Task handle. */
@@ -433,7 +433,7 @@ void TFL_delete_tasks(){
  * @param pvParameters - not used
  */
 void TFL_task_loop(void *pvParameters){
-  uint8_t tensor_arena[TFL->TensorArenaSize];
+  uint8_t *tensor_arena = (uint8_t *)heap_caps_malloc(TFL->TensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   TFL->stats = new TFL_stats_t;
   tflite::AllOpsResolver resolver; //TODO: infer needed Ops from model??
   tflite::MicroInterpreter interpreter(
