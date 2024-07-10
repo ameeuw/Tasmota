@@ -114,6 +114,7 @@ TfLiteTensor* output = nullptr;
 int8_t *berry_output_buf = nullptr;
 size_t berry_output_bufsize;
 int TensorArenaSize = 2000;
+uint8_t *tensor_arena = nullptr;
 uint8_t max_invocations;    // max. invocations per second
 
 TaskHandle_t loop_task = nullptr;
@@ -140,7 +141,6 @@ TFL_stats_t *stats = nullptr;
 };
 
 TFL_ctx_t *TFL = nullptr;
-uint8_t *tensor_arena = nullptr;
 RingbufHandle_t TFL_log_buffer = nullptr;
 
 
@@ -179,10 +179,9 @@ bool TFL_create_task(){
 
 bool TFL_init_CAM(){
     AddLog(LOG_LEVEL_DEBUG, PSTR("TFL: mode webcam not implemented yet"));
+    free(TFL->tensor_arena);
     delete TFL;
     TFL = nullptr;
-    free(tensor_arena);
-    tensor_arena = nullptr;
     return bfalse;
 }
 
@@ -426,10 +425,9 @@ void TFL_delete_tasks(){
 #ifdef USE_I2S
   if(TFL->mic != nullptr) {delete TFL->mic;} 
 #endif //USE_I2S
+  free(TFL->tensor_arena);
   delete TFL;
   TFL = nullptr;
-  tensor_arene = nullptr;
-  free(tensor_arena);
 }
 
 /**
@@ -438,11 +436,12 @@ void TFL_delete_tasks(){
  * @param pvParameters - not used
  */
 void TFL_task_loop(void *pvParameters){
-  tensor_arena = (uint8_t *)heap_caps_malloc(TFL->TensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  uint8_t *tensor_arena = (uint8_t *)heap_caps_malloc(TFL->TensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  TFL->tensor_arena = tensor_arena;
   TFL->stats = new TFL_stats_t;
   tflite::AllOpsResolver resolver; //TODO: infer needed Ops from model??
   tflite::MicroInterpreter interpreter(
-      TFL->model, resolver, tensor_arena, TFL->TensorArenaSize);
+      TFL->model, resolver, TFL->tensor_arena, TFL->TensorArenaSize);
   int allocate_status = interpreter.AllocateTensors();
   if (allocate_status != kTfLiteOk) {
     MicroPrintf( PSTR("AllocateTensors() failed"));
