@@ -591,7 +591,7 @@ newframe: /* a new call frame */
             if (var_isstr(b)) {
                 bstring *name = var_tostr(b);
                 int idx = be_global_find(vm, name);
-                if (idx > -1) {
+                if (idx >= 0) {
                     *v = *be_global_var(vm, idx);
                 } else {
                     vm_error(vm, "attribute_error", "'%s' undeclared", str(name));
@@ -994,7 +994,6 @@ newframe: /* a new call frame */
             }
             dispatch();
         }
-        opcase(SETMET):
         opcase(SETMBR): {
 #if BE_USE_PERF_COUNTERS
             vm->counter_set++;
@@ -1021,7 +1020,7 @@ newframe: /* a new call frame */
                 bclass *obj = var_toobj(a);
                 bstring *attr = var_tostr(b);
                 bvalue result = *c;
-                if (var_isfunction(&result) && (IGET_OP(ins) == OP_SETMBR)) {   /* don't mark as static if SETMET was used */
+                if (var_isfunction(&result)) {
                     var_markstatic(&result);
                 }
                 if (!be_class_setmember(vm, obj, attr, &result)) {

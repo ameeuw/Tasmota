@@ -64,6 +64,9 @@ ftp       start stop ftp server: 0 = OFF, 1 = SDC, 2 = FlashFile
 #define UFS_TFAT          2
 #define UFS_TLFS          3
 
+#define UFS_SDC           0
+#define UFS_SDMMC         1
+
 /*
 // In tasmota.ino
 #ifdef ESP8266
@@ -97,6 +100,8 @@ uint8_t ufs_dir;
 // 0 = None, 1 = SD, 2 = ffat, 3 = littlefs
 uint8_t ufs_type;
 uint8_t ffs_type;
+// sd type 0 = SD spi interface, 1 = MMC interface
+uint8_t sd_type;
 
 struct {
   char run_file[48];
@@ -206,6 +211,7 @@ void UfsCheckSDCardInit(void) {
 #endif  // ESP32
 
       ufs_type = UFS_TSDC;
+      sd_type = UFS_SDC;
       dfsp = ufsp;
       if (ffsp) {ufs_dir = 1;}
       // make sd card the global filesystem
@@ -239,6 +245,7 @@ void UfsCheckSDCardInit(void) {
       ufsp = &SD_MMC;
 
       ufs_type = UFS_TSDC;
+      sd_type = UFS_SDMMC;
       dfsp = ufsp;
       if (ffsp) {ufs_dir = 1;}
       // make sd card the global filesystem
@@ -274,11 +281,29 @@ uint32_t UfsInfo(uint32_t sel, uint32_t type) {
       }
 #endif  // ESP8266
 #ifdef ESP32
+#ifdef SOC_SDMMC_HOST_SUPPORTED
+      if (sd_type == UFS_SDC) {
+        if (sel == 0) {
+          result = SD.totalBytes();
+        } else {
+          result = (SD.totalBytes() - SD.usedBytes());
+        }
+      } else if (sd_type == UFS_SDMMC) {
+        if (sel == 0) {
+          result = SD_MMC.totalBytes();
+        } else {
+          result = (SD_MMC.totalBytes() - SD_MMC.usedBytes());
+        }
+      } else {
+        result = 0;
+      }
+#else
       if (sel == 0) {
         result = SD.totalBytes();
       } else {
         result = (SD.totalBytes() - SD.usedBytes());
       }
+#endif // SOC_SDMMC_HOST_SUPPORTED
 #endif  // ESP32
 #endif  // USE_SDCARD
       break;
@@ -467,6 +492,117 @@ bool TfsRenameFile(const char *fname1, const char *fname2) {
     return false;
   }
   return true;
+}
+
+/*********************************************************************************************\
+ * Log file
+ * 
+ * Enable with command `FileLog 1..4` or `FileLog 11..14`
+ * Rotate max 16 x FILE_LOG_SIZE kB log files /log01 -> /log02 ... /log16 -> /log01 ...
+ * Filesystem needs to be larger than 10k (FILE_LOG_FREE)
+\*********************************************************************************************/
+
+#ifndef FILE_LOG_SIZE
+#define FILE_LOG_SIZE  100               // Log file size in kBytes (100kB is based on minimal filesystem of 320kB)
+#endif
+#define FILE_LOG_FREE  10                // Minimum free filesystem space in kBytes
+
+#define FILE_LOG_COUNT 16                // Number of log files (max 16 as four bits are reserved for index)
+#define FILE_LOG_NAME  "/log%02d"        // Log file name
+
+void FileLoggingAsync(bool refresh) {
+  static uint32_t index = 1;             // Rotating log buffer entry pointer
+
+  uint32_t filelog_level = Settings->filelog_level % 10;
+  if (!ffs_type || !filelog_level) { return; }  // No filesystem or [FileLog] disabled
+  if (refresh && !NeedLogRefresh(filelog_level, index)) { return; }  // No log buffer changes
+  uint32_t filelog_option = Settings->filelog_level / 10;
+
+  char fname[14];
+  File file;
+  uint32_t log_file_idx = Settings->mbflag2.log_file_idx;       // 0..15
+  for (uint32_t retry = 0; retry <= 1; retry++) {
+    snprintf_P(fname, sizeof(fname), PSTR(FILE_LOG_NAME), log_file_idx +1);  // /log01
+    file = ffsp->open(fname, "a");       // Append to existing log file
+    if (!file) { 
+      file = ffsp->open(fname, "w");     // Make new log file
+      if (!file) { 
+        Settings->filelog_level = 0;     // [FileLog] disable
+        AddLog(LOG_LEVEL_INFO, PSTR("FLG: Logging disabled. Save failed"));
+        return;                          // Failed to make file
+      }
+    }
+
+    bool fs_full = (UfsFree() < FILE_LOG_FREE);
+    if (!fs_full && (file.size() < (FILE_LOG_SIZE * 1000))) { break; }
+
+    file.close();
+
+    if (1 == retry) {
+      Settings->filelog_level = 0;       // [FileLog] disable
+      AddLog(LOG_LEVEL_INFO, PSTR("FLG: Logging disabled. No free space"));
+      return;
+    }
+
+    // Rotate log file(s) as size is over FILE_LOG_SIZE or free space is less than FILE_LOG_FREE
+    uint32_t last_log_file_idx = log_file_idx;  // 0..15
+    log_file_idx++;
+
+    if ((1 == filelog_option) &&
+        (fs_full || (log_file_idx == FILE_LOG_COUNT))) {  // Rotate until free space is less than FILE_LOG_FREE
+      Settings->filelog_level = 0;       // [FileLog] disable
+      AddLog(LOG_LEVEL_INFO, PSTR("FLG: Logging disabled. Max rotates"));
+      return;
+    }
+
+    if (log_file_idx >= FILE_LOG_COUNT) { log_file_idx = 0; }  // Rotate max 16 log files
+    snprintf_P(fname, sizeof(fname), PSTR(FILE_LOG_NAME), log_file_idx +1);
+    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("FLG: Rotate file %s"), fname +1);  // Skip leading slash
+    Settings->mbflag2.log_file_idx = log_file_idx;  // Save for restart or power on
+
+    if (0 == filelog_option) {           // Remove oldest log file(s)
+      // Remove log file(s) taking into account non-sequential file names and different file sizes
+      uint32_t idx = log_file_idx;       // Next log file index
+      do {                               // Need free space around FILE_LOG_SIZE so find oldest log file(s) and remove it
+        snprintf_P(fname, sizeof(fname), PSTR(FILE_LOG_NAME), idx +1);
+        if (ffsp->remove(fname)) {       // Remove oldest (non-)sequential log file(s)
+          AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("FLG: Delete file %s"), fname +1);  // Skip leading slash
+        }
+        idx++;
+        if (idx >= FILE_LOG_COUNT) { idx = 0; }
+      } while ((UfsFree() < FILE_LOG_FREE) && (idx != last_log_file_idx));
+    }
+  }
+
+#ifdef USE_WEBCAM
+  WcInterrupt(0);                        // Stop stream if active to fix TG1WDT_SYS_RESET
+#endif
+  char* line;
+  size_t len;
+  while (GetLog(filelog_level, &index, &line, &len)) {
+    // This will timeout on ESP32-webcam
+    // But now solved with WcInterrupt(0) in support_esp.ino
+    file.write((uint8_t*)line, len -1);  // Write up to LOG_BUFFER_SIZE log data
+    snprintf_P(fname, sizeof(fname), PSTR("\r\n"));
+    file.write((uint8_t*)fname, 2);
+  }
+#ifdef USE_WEBCAM
+  WcInterrupt(1);
+#endif
+
+  file.close();
+}
+
+void FileLoggingDelete(void) {
+  if (!ffs_type) { return; }             // No filesystem
+
+  char fname[14];
+  for (uint32_t idx = 0; idx < FILE_LOG_COUNT; idx++) {
+    snprintf_P(fname, sizeof(fname), PSTR(FILE_LOG_NAME), idx +1);
+    ffsp->remove(fname);                 // Remove all log file(s)
+  }
+  Settings->mbflag2.log_file_idx = 0;
+  AddLog(LOG_LEVEL_INFO, PSTR("FLG: Log files deleted"));
 }
 
 /*********************************************************************************************\
@@ -1092,7 +1228,7 @@ const char UFS_FORM_FILE_UPGb[] PROGMEM =
   "<form method='get' action='ufse'><input type='hidden' name='file' value='%s/" D_NEW_FILE "'>"
   "<button type='submit'>" D_CREATE_NEW_FILE "</button></form>";
 const char UFS_FORM_FILE_UPGb1[] PROGMEM =
-  "<input type='checkbox' id='shf' onclick='sf(eb(\"shf\").checked);' name='shf'>" D_SHOW_HIDDEN_FILES "</input>";
+  "<label><input type='checkbox' id='shf' onclick='sf(eb(\"shf\").checked);' name='shf'>" D_SHOW_HIDDEN_FILES "</label>";
 
 const char UFS_FORM_FILE_UPGb2[] PROGMEM =
   "</fieldset>"
@@ -1578,7 +1714,7 @@ void UfsEditor(void) {
         AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("UFS: UfsEditor: read=%d"), l);
         if (l < 0) { break; }
         buf[l] = '\0';
-        WSContentSend_P(PSTR("%s"), buf);
+        WSContentSend_P(PSTR("%s"), HtmlEscape((char*)buf).c_str());
         filelen -= l;
       }
       fp.close();
@@ -1713,7 +1849,6 @@ void Switch_FTP(void) {
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
-
 
 bool Xdrv50(uint32_t function) {
   bool result = false;

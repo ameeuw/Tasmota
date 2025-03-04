@@ -55,6 +55,7 @@ be_extern_native_module(TFL);
 be_extern_native_module(mdns);
 #ifdef USE_ZIGBEE
 be_extern_native_module(zigbee);
+be_extern_native_module(matter_zigbee);
 #endif // USE_ZIGBEE
 #ifdef USE_BERRY_CAM
 be_extern_native_module(cam);
@@ -151,7 +152,7 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
     &be_native_module(unishox),
 #endif // USE_UNISHOX_COMPRESSION
 
-#ifdef USE_WS2812
+#if defined(USE_WS2812) && !defined(USE_WS2812_FORCE_NEOPIXELBUS)
     &be_native_module(animate),
 #endif // USE_WS2812
 
@@ -171,12 +172,13 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #endif // USE_WEBSERVER
 #ifdef USE_ZIGBEE
     &be_native_module(zigbee),
+    &be_native_module(matter_zigbee),
 #endif // USE_ZIGBEE
     &be_native_module(flash),
     &be_native_module(partition_core),
     &be_native_module(crc),
     &be_native_module(crypto),
-#if defined(USE_BERRY_ULP) && ((CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3))
+#if defined(USE_BERRY_ULP) && defined(CONFIG_ULP_COPROC_ENABLED)
     &be_native_module(ULP),
 #endif // USE_BERRY_ULP
 #if defined(USE_BERRY_TF_LITE)
@@ -215,6 +217,7 @@ be_extern_native_class(Wire);
 be_extern_native_class(I2C_Driver);
 be_extern_native_class(AXP192);
 be_extern_native_class(AXP202);
+be_extern_native_class(AXP2102);
 be_extern_native_class(OneWire);
 be_extern_native_class(Leds_ntv);
 be_extern_native_class(Leds);
@@ -231,6 +234,7 @@ be_extern_native_class(udp);
 be_extern_native_class(webclient);
 be_extern_native_class(tcpclient);
 be_extern_native_class(tcpclientasync);
+be_extern_native_class(webserver_async);
 be_extern_native_class(tcpserver);
 be_extern_native_class(energy_struct);
 // LVGL core classes
@@ -276,6 +280,7 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(I2C_Driver),
     &be_native_class(AXP192),
     &be_native_class(AXP202),
+    &be_native_class(AXP2102),
 #endif // USE_I2C
     &be_native_class(md5),
 #ifdef USE_WEBCLIENT
@@ -283,11 +288,14 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(webclient),
     &be_native_class(tcpclient),
     &be_native_class(tcpclientasync),
+#ifdef USE_BERRY_DEBUG
+    &be_native_class(webserver_async),  // include only when USE_BERRY_DEBUG is enabled
+#endif // USE_BERRY_DEBUG
 #endif // USE_WEBCLIENT
 #ifdef USE_BERRY_TCPSERVER
     &be_native_class(tcpserver),
 #endif // USE_BERRY_TCPSERVER
-#ifdef USE_WS2812
+#if defined(USE_WS2812) && !defined(USE_WS2812_FORCE_NEOPIXELBUS)
     &be_native_class(Leds_ntv),
     &be_native_class(Leds),
 #endif // USE_WS2812
