@@ -14,6 +14,7 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_HOME_ASSISTANT        | -     | - / - | -     | -     | -     | -     |
 | USE_TASMOTA_DISCOVERY     | x     | x / x | x     | x     | x     | x     |
 | USE_MQTT_TLS\*            | -     | - / x | -     | -     | -     | -     |
+| USE_MQTT_CLIENT_CERT      | -     | - / - | -     | -     | -     | -     |
 | USE_MQTT_AWS_IOT          | -     | - / - | -     | -     | -     | -     |
 | USE_4K_RSA                | -     | - / - | -     | -     | -     | -     |
 | USE_TELEGRAM              | -     | - / - | -     | -     | -     | -     |
@@ -245,6 +246,8 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_IR_REMOTE             | -     | x / - | x     | x     | x     | x     |
 | USE_IR_RECEIVE            | -     | x / - | x     | x     | x     | x     |
 | USE_IR_REMOTE_FULL        | -     | - / - | -     | -     | x     | -     | Enable ALL protocols        |
+|                           |       |       |       |       |       |       |
+| USE_WIZMOTE               | -     | - / - | -     | -     | -     | -     |
 |                           |       |       |       |       |       |       |
 | USE_SR04                  | -     | - / - | -     | x     | -     | -     |
 | USE_ME007                 | -     | - / - | -     | -     | -     | -     |
