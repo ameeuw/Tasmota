@@ -52,12 +52,14 @@
 
 // Common
 #define D_ABSOLUTE_HUMIDITY "Absoliuti drėgmė"
+#define D_ADDRESS "Address"
 #define D_ADMIN "Administratoriaus"
 #define D_AIR_QUALITY "Oro kokybė"
 #define D_AP "AP"                    // Access Point
 #define D_AS "kaip"
 #define D_AT "prie"
 #define D_AUTO "AUTOMATINĖ"
+#define D_AUTO_UPDATE "Auto Update"
 #define D_BATTERY "Baterija"
 #define D_BATT "Baterija"             // Short for Battery
 #define D_BATTERY_CHARGE "Įkrova"    // Battery charge in %
@@ -88,6 +90,7 @@
 #define D_DEBUG "Derinimas"
 #define D_DEWPOINT "Rasos taškas"
 #define D_DISABLED "Išjungta"
+#define D_DISCONNECTED "Disconnected"
 #define D_DISTANCE "Atstumas"
 #define D_DNS_SERVER "DNS Serveris"
 #define D_DO "Ištirpęs deguonis"
@@ -370,6 +373,7 @@
 #define D_PROGRAM_VERSION "Programos versija"
 #define D_BUILD_DATE_AND_TIME "Kompiliavimo data ir laikas"
 #define D_CORE_AND_SDK_VERSION "Core/SDK versija"
+#define D_HOSTED_MCU "Hosted MCU"
 #define D_FLASH_WRITE_COUNT "Flash įrašų skaičius"
 #define D_MAC_ADDRESS "MAC adresas"
 #define D_MQTT_HOST "MQTT serveris"
@@ -450,6 +454,8 @@
 #define D_DOMOTICZ_IDX "Idx"
 #define D_DOMOTICZ_KEY_IDX "Rakto idx"
 #define D_DOMOTICZ_SWITCH_IDX "Jungiklio idx"
+#define D_DOMOTICZ_KEY "Key"
+#define D_DOMOTICZ_SWITCH "Switch"
 #define D_DOMOTICZ_SENSOR_IDX "Jutiklio idx"
   #define D_DOMOTICZ_TEMP "Temperatūra"
   #define D_DOMOTICZ_TEMP_HUM "Temperatūra, Drėgmė"
@@ -749,6 +755,13 @@
 #define D_SENSOR_SDIO_D1       "SDIO D1"
 #define D_SENSOR_SDIO_D2       "SDIO D2"
 #define D_SENSOR_SDIO_D3       "SDIO D3"
+#define D_SENSOR_HSDIO_CMD     "HSDIO CMD"
+#define D_SENSOR_HSDIO_CLK     "HSDIO CLK"
+#define D_SENSOR_HSDIO_RST     "HSDIO RST"
+#define D_SENSOR_HSDIO_D0      "HSDIO D0"
+#define D_SENSOR_HSDIO_D1      "HSDIO D1"
+#define D_SENSOR_HSDIO_D2      "HSDIO D2"
+#define D_SENSOR_HSDIO_D3      "HSDIO D3"
 #define D_SENSOR_BACKLIGHT     "Backlight"
 #define D_SENSOR_PMS5003_TX    "PMS5003 Tx"
 #define D_SENSOR_PMS5003_RX    "PMS5003 Rx"
@@ -776,6 +789,8 @@
 #define D_SENSOR_SDM630_RX     "SDM630 Rx"
 #define D_SENSOR_WE517_TX      "WE517 Tx"
 #define D_SENSOR_WE517_RX      "WE517 Rx"
+#define D_SENSOR_LD2402_TX     "LD2402 Tx"
+#define D_SENSOR_LD2402_RX     "LD2402 Rx"
 #define D_SENSOR_LD2410_TX     "LD2410 Tx"
 #define D_SENSOR_LD2410_RX     "LD2410 Rx"
 #define D_SENSOR_LD2410S_TX    "LD2410S Tx"
@@ -1313,5 +1328,9 @@
 #define D_EXPORT                          "Eksportuoti"
 #define D_CHARGING                        "Kraunasi"
 #define D_CAPACITY                        "Talpa"
+
+// xnrg_34_v9240.ino
+#define D_SENSOR_V9240_TX "V9240 TX"
+#define D_SENSOR_V9240_RX "V9240 RX"
 
 #endif  // _LANGUAGE_LT_LT_H_

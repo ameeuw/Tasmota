@@ -40,6 +40,17 @@ be_extern_native_module(gpio);
 be_extern_native_module(display);
 be_extern_native_module(energy);
 be_extern_native_module(webserver);
+#ifdef USE_BERRY_HTTPSERVER
+be_extern_native_module(httpserver);
+
+#ifdef USE_BERRY_WSSERVER
+be_extern_native_module(wsserver);
+#endif // USE_BERRY_WSSERVER
+
+#ifdef USE_BERRY_WEBFILES
+be_extern_native_module(webfiles);
+#endif // USE_BERRY_WEBFILES
+#endif // USE_BERRY_HTTPSERVER
 be_extern_native_module(flash);
 be_extern_native_module(path);
 be_extern_native_module(unishox);
@@ -72,6 +83,14 @@ be_extern_native_module(haspmota);
 #endif // USE_LVGL_HASPMOTA
 #endif // USE_LVGL
 #ifdef USE_MATTER_DEVICE
+#ifdef USE_WS2812
+#ifdef USE_BERRY_ANIMATION
+be_extern_native_module(animation);
+#ifdef USE_BERRY_ANIMATION_DSL
+be_extern_native_module(animation_dsl);
+#endif // USE_BERRY_ANIMATION_DSL
+#endif // USE_BERRY_ANIMATION
+#endif // USE_WS2812
 be_extern_native_module(matter);
 #endif // USE_MATTER_DEVICE
 
@@ -153,7 +172,9 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #endif // USE_UNISHOX_COMPRESSION
 
 #if defined(USE_WS2812) && !defined(USE_WS2812_FORCE_NEOPIXELBUS)
+  #ifdef USE_BERRY_ANIMATE
     &be_native_module(animate),
+  #endif // USE_BERRY_ANIMATE
 #endif // USE_WS2812
 
 #ifdef USE_LVGL
@@ -170,6 +191,15 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #ifdef USE_WEBSERVER
     &be_native_module(webserver),
 #endif // USE_WEBSERVER
+#ifdef USE_BERRY_HTTPSERVER
+    &be_native_module(httpserver),
+#ifdef USE_BERRY_WSSERVER
+    &be_native_module(wsserver),
+#endif // USE_BERRY_WSSERVER
+#ifdef USE_BERRY_WEBFILES
+    &be_native_module(webfiles),
+#endif // USE_BERRY_WEBFILES
+#endif // USE_BERRY_HTTPSERVER
 #ifdef USE_ZIGBEE
     &be_native_module(zigbee),
     &be_native_module(matter_zigbee),
@@ -197,6 +227,14 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #ifdef USE_MATTER_DEVICE
     &be_native_module(matter),
 #endif // USE_MATTER_DEVICE
+#ifdef USE_WS2812
+#ifdef USE_BERRY_ANIMATION
+    &be_native_module(animation),
+#ifdef USE_BERRY_ANIMATION_DSL
+    &be_native_module(animation_dsl),
+#endif // USE_BERRY_ANIMATION_DSL
+#endif // USE_BERRY_ANIMATION
+#endif // USE_WS2812
 #endif // TASMOTA
     CUSTOM_NATIVE_MODULES
     /* user-defined modules register end */
@@ -204,6 +242,7 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 };
 
 be_extern_native_class(dyn);
+be_extern_native_class(sortedmap);
 be_extern_native_class(tasmota);
 be_extern_native_class(Trigger);
 be_extern_native_class(Driver);
@@ -261,6 +300,7 @@ BERRY_LOCAL bclass_array be_class_table = {
 #ifdef TASMOTA
     /* first list are direct classes */
     &be_native_class(dyn),
+    &be_native_class(sortedmap),
     &be_native_class(tasmota),
     &be_native_class(Trigger),
     &be_native_class(Driver),
@@ -283,7 +323,6 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(AXP2102),
 #endif // USE_I2C
     &be_native_class(md5),
-#ifdef USE_WEBCLIENT
     &be_native_class(udp),
     &be_native_class(webclient),
     &be_native_class(tcpclient),
@@ -291,7 +330,6 @@ BERRY_LOCAL bclass_array be_class_table = {
 #ifdef USE_BERRY_DEBUG
     &be_native_class(webserver_async),  // include only when USE_BERRY_DEBUG is enabled
 #endif // USE_BERRY_DEBUG
-#endif // USE_WEBCLIENT
 #ifdef USE_BERRY_TCPSERVER
     &be_native_class(tcpserver),
 #endif // USE_BERRY_TCPSERVER
