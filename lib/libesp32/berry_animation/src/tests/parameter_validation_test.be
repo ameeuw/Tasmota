@@ -6,13 +6,15 @@
 import animation
 import global
 
+import "./core/param_encoder" as encode_constraints
+
 # Test that parameters accept ValueProviders and integers only
 def test_parameter_accepts_value_providers()
   print("Testing parameter validation with ValueProviders...")
   
   # Create engine for testing
   var strip = global.Leds()
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Create a test animation using new constructor pattern
   var test_anim = animation.animation(engine)
@@ -20,7 +22,6 @@ def test_parameter_accepts_value_providers()
   test_anim.duration = 0
   test_anim.loop = false
   test_anim.opacity = 255
-  test_anim.name = "test"
   
   # Test with static integer value (using existing 'opacity' parameter with range 0-255)
   assert(test_anim.set_param("opacity", 42) == true, "Should accept static integer")
@@ -48,7 +49,7 @@ def test_loop_boolean_validation()
   
   # Create engine for testing
   var strip = global.Leds()
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Create a test animation
   var test_anim = animation.animation(engine)
@@ -77,7 +78,7 @@ def test_range_validation()
   
   # Create engine for testing
   var strip = global.Leds()
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Create a test animation
   var test_anim = animation.animation(engine)
@@ -96,7 +97,7 @@ def test_range_validation_with_providers()
   
   # Create engine for testing
   var strip = global.Leds()
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Create a test animation
   var test_anim = animation.animation(engine)
@@ -123,21 +124,24 @@ def test_type_validation()
   
   # Create engine for testing
   var strip = global.Leds()
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Create a test class with different parameter types
   class TestClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "int_param": {"default": 42},                    # Default type is "int"
       "explicit_int_param": {"type": "int", "default": 10},
       "string_param": {"type": "string", "default": "hello"},
       "bool_param": {"type": "bool", "default": true},
       "instance_param": {"type": "instance", "default": nil},
       "any_param": {"type": "any", "default": nil}
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
+    end
+    def tostring()
+      return ''
     end
   end
   

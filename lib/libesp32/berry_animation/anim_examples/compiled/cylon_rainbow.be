@@ -15,8 +15,8 @@ var strip_len_ = animation.strip_length(engine)
 var eye_duration_ = 5000  # duration for a cylon eye cycle
 var eye_palette_ = bytes("FFFF0000" "FFFFFF00" "FF008000" "FFEE82EE")
 var eye_color_ = animation.color_cycle(engine)
-eye_color_.palette = eye_palette_
-eye_color_.cycle_period = 0
+eye_color_.colors = eye_palette_
+eye_color_.period = 0
 var cosine_val_ = (def (engine)
   var provider = animation.cosine_osc(engine)
   provider.min_value = 0
@@ -36,10 +36,12 @@ red_eye_.color = eye_color_  # palette that will advance when we do `eye_color.n
 red_eye_.pos = cosine_val_  # oscillator for position
 red_eye_.beacon_size = 3  # small 3 pixels eye
 red_eye_.slew_size = 2  # with 2 pixel shading around
-var cylon_eye_ = animation.SequenceManager(engine, -1)
-  .push_play_step(red_eye_, eye_duration_)  # use COSINE movement
+var cylon_eye_ = animation.sequence_manager(engine, -1)
+  .push_closure_step(def (engine) cosine_val_.start(engine.time_ms) end)
+  .push_play_step(red_eye_, animation.resolve(eye_duration_))  # use COSINE movement
   .push_closure_step(def (engine) red_eye_.pos = triangle_val_ end)  # switch to TRIANGLE
-  .push_play_step(red_eye_, eye_duration_)
+  .push_closure_step(def (engine) triangle_val_.start(engine.time_ms) end)
+  .push_play_step(red_eye_, animation.resolve(eye_duration_))
   .push_closure_step(def (engine) red_eye_.pos = cosine_val_ end)  # switch back to COSINE for next iteration
   .push_closure_step(def (engine) eye_color_.next = 1 end)  # advance to next color
 engine.add(cylon_eye_)
@@ -56,7 +58,7 @@ set eye_duration = 5s     # duration for a cylon eye cycle
 
 palette eye_palette = [ red, yellow, green, violet ]
 
-color eye_color = color_cycle(palette=eye_palette, cycle_period=0)
+color eye_color = color_cycle(colors=eye_palette, period=0)
 
 set cosine_val = cosine_osc(min_value = 0, max_value = strip_len - 2, duration = eye_duration)
 set triangle_val = triangle(min_value = 0, max_value = strip_len - 2, duration = eye_duration)
@@ -69,8 +71,10 @@ animation red_eye = beacon_animation(
 )
 
 sequence cylon_eye forever {
+  restart cosine_val
   play red_eye for eye_duration # use COSINE movement
   red_eye.pos = triangle_val    # switch to TRIANGLE
+  restart triangle_val
   play red_eye for eye_duration
   red_eye.pos = cosine_val      # switch back to COSINE for next iteration
   eye_color.next = 1            # advance to next color

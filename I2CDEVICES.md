@@ -119,6 +119,7 @@ Index | Define              | Driver   | Device   | Address(es) | Bus2 | Descrip
   79  | USE_GDK101          | xsns_106 | GDK101   | 0x18 - 0x1B |      | Gamma Radiation Sensor
   80  | USE_TC74            | xsns_108 | TC74     | 0x48 - 0x4F |      | Temperature sensor
   81  | USE_PCA9557         | xdrv_69  | PCA95xx  | 0x18 - 0x1F |      | 8-bit I/O expander as virtual button/switch/relay
+  81  | USE_TCA9554         | xdrv_69  | TCA95xx  | 0x20 - 0x27 |      | 8-bit I/O expander as virtual button/switch/relay
   82  | USE_SGP4X           | xsns_109 | SGP4X    | 0x59        |      | Gas (TVOC/NOx index)
   83  | USE_MAX17043        | xsns_110 | MAX17043 | 0x36        |      | Fuel-gauge for 3.7 Volt Lipo battery
   84  | USE_ENS16x          | xsns_111 | ENS16x   | 0x52 - 0x53 |      | Gas (TVOC, eCO2) and air quality sensor
@@ -133,5 +134,6 @@ Index | Define              | Driver   | Device   | Address(es) | Bus2 | Descrip
   92  | USE_PCF85063        | xdrv_56  | PCF85063  | 0x51       |      | PCF85063 Real time clock
   93  | USE_AS33772S        | xdrv_119 | AS33772S  | 0x52       | Yes  | AS33772S USB PD Sink Controller
   94  | USE_RV3028          | xdrv_56  | RV3028    | 0x52       | Yes  | RV-3028-C7 RTC Controller
+  95  | USE_AGS02MA         | xsns_118 | AGS02MA   | 0x1A       |      | TVOC Gas sensor
 
   NOTE: Bus2 supported on ESP32 only.

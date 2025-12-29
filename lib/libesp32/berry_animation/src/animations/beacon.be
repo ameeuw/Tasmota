@@ -17,33 +17,27 @@
 # 2: `slew_size`, number of pixels to fade from back to fore color, can be `0`
 # 3: `beacon_size`, number of pixels of the beacon
 
+import "./core/param_encoder" as encode_constraints
+
 #@ solidify:BeaconAnimation,weak
 class BeaconAnimation : animation.animation
   # NO instance variables for parameters - they are handled by the virtual parameter system
   
   # Parameter definitions following the new specification
-  static var PARAMS = {
-    "color": {"default": 0xFFFFFFFF},
+  static var PARAMS = animation.enc_params({
     "back_color": {"default": 0xFF000000},
     "pos": {"default": 0},
     "beacon_size": {"min": 0, "default": 1},
     "slew_size": {"min": 0, "default": 0}
-  }
+  })
 
   # Render the beacon to the provided frame buffer
   #
   # @param frame: FrameBuffer - The frame buffer to render to
-  # @param time_ms: int - Optional current time in milliseconds (defaults to engine time)
+  # @param time_ms: int - Current time in milliseconds
+  # @param strip_length: int - Length of the LED strip in pixels
   # @return bool - True if frame was modified, false otherwise
-  def render(frame, time_ms)
-    if frame == nil
-      return false
-    end
-    
-    # Auto-fix time_ms and start_time
-    time_ms = self._fix_time_ms(time_ms)
-    
-    var pixel_size = frame.width
+  def render(frame, time_ms, strip_length)
     # Use virtual parameter access - automatically resolves ValueProviders
     var back_color = self.back_color
     var pos = self.pos
@@ -52,8 +46,8 @@ class BeaconAnimation : animation.animation
     var color = self.color
     
     # Fill background if not transparent
-    if back_color != 0xFF000000
-      frame.fill_pixels(back_color)
+    if (back_color != 0xFF000000) && ((back_color & 0xFF000000) != 0x00)
+      frame.fill_pixels(frame.pixels, back_color)
     end
     
     # Calculate beacon boundaries
@@ -64,16 +58,18 @@ class BeaconAnimation : animation.animation
     if beacon_min < 0
       beacon_min = 0
     end
-    if beacon_max >= pixel_size
-      beacon_max = pixel_size
+    if beacon_max >= strip_length
+      beacon_max = strip_length
     end
     
     # Draw the main beacon
-    var i = beacon_min
-    while i < beacon_max
-      frame.set_pixel_color(i, color)
-      i += 1
-    end
+    frame.fill_pixels(frame.pixels, color, beacon_min, beacon_max)
+    var i
+    # var i = beacon_min
+    # while i < beacon_max
+    #   frame.set_pixel_color(i, color)
+    #   i += 1
+    # end
     
     # Draw slew regions if slew_size > 0
     if slew_size > 0
@@ -84,8 +80,8 @@ class BeaconAnimation : animation.animation
       if left_slew_min < 0
         left_slew_min = 0
       end
-      if left_slew_max >= pixel_size
-        left_slew_max = pixel_size
+      if left_slew_max >= strip_length
+        left_slew_max = strip_length
       end
       
       i = left_slew_min
@@ -104,8 +100,8 @@ class BeaconAnimation : animation.animation
       if right_slew_min < 0
         right_slew_min = 0
       end
-      if right_slew_max >= pixel_size
-        right_slew_max = pixel_size
+      if right_slew_max >= strip_length
+        right_slew_max = strip_length
       end
       
       i = right_slew_min

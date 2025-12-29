@@ -12,7 +12,7 @@ def test_wave_animation_basic()
   
   # Create engine and animation
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var wave_anim = animation.wave_animation(engine)
   
   assert(wave_anim != nil, "WaveAnimation should be created")
@@ -34,7 +34,7 @@ def test_wave_animation_custom()
   
   # Create engine and animation with custom parameters
   var strip = global.Leds(20)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var wave_anim = animation.wave_animation(engine)
   
   # Set custom parameters using virtual member access
@@ -69,7 +69,7 @@ def test_wave_animation_parameters()
   print("Testing WaveAnimation parameter changes...")
   
   var strip = global.Leds(15)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var wave_anim = animation.wave_animation(engine)
   
   # Test parameter changes using virtual member access
@@ -96,7 +96,7 @@ def test_wave_animation_update_render()
   print("Testing WaveAnimation update and render...")
   
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var wave_anim = animation.wave_animation(engine)
   
   # Set parameters
@@ -110,15 +110,17 @@ def test_wave_animation_update_render()
   var frame = animation.frame_buffer(10)
   
   # Start animation
+  # Note: When testing animations directly (not through engine_proxy), we must set start_time manually
+  wave_anim.start_time = 1000  # Set start_time manually for direct testing
   wave_anim.start(1000)
   assert(wave_anim.is_running == true, "Animation should be running after start")
   
   # Test update
-  var result = wave_anim.update(1500)
-  assert(result == true, "Update should return true for running animation")
+  wave_anim.update(1500)
+  assert(wave_anim.is_running == true, "Animation should still be running after update")
   
   # Test render
-  result = wave_anim.render(frame, 1500)
+  var result = wave_anim.render(frame, 1500, engine.strip_length)
   assert(result == true, "Render should return true for running animation")
   
   # Check that colors were set (should not all be black with high amplitude)
@@ -141,7 +143,7 @@ def test_wave_types()
   print("Testing different wave types...")
   
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var frame = animation.frame_buffer(10)
   
   # Test each wave type
@@ -156,9 +158,10 @@ def test_wave_types()
     wave_anim.frequency = 50
     wave_anim.wave_speed = 0  # No movement for testing
     
+    wave_anim.start_time = 1000  # Set start_time manually for direct testing
     wave_anim.start(1000)
     wave_anim.update(1000)
-    var result = wave_anim.render(frame, 1000)
+    var result = wave_anim.render(frame, 1000, engine.strip_length)
     assert(result == true, f"Wave type {wave_types[i]} should render successfully")
     
     i += 1
@@ -172,7 +175,7 @@ def test_wave_constructors()
   print("Testing wave constructor functions...")
   
   var strip = global.Leds(30)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Test wave_rainbow_sine
   var rainbow_wave = animation.wave_rainbow_sine(engine)
@@ -203,7 +206,7 @@ def test_wave_tostring()
   print("Testing WaveAnimation string representation...")
   
   var strip = global.Leds(12)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var wave_anim = animation.wave_animation(engine)
   
   # Set parameters

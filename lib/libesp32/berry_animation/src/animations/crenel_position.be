@@ -18,35 +18,29 @@
 # 3: `low_size`, number of pixel until next pos - full cycle is 2 + 3
 # 4: `nb_pulse`, number of pulses, or `-1` for infinite
 
+import "./core/param_encoder" as encode_constraints
+
 #@ solidify:CrenelPositionAnimation,weak
 class CrenelPositionAnimation : animation.animation
   # NO instance variables for parameters - they are handled by the virtual parameter system
   
   # Parameter definitions with constraints
-  static var PARAMS = {
-    "color": {"default": 0xFFFFFFFF},
-    "back_color": {"default": 0xFF000000},
-    "pos": {"default": 0},
-    "pulse_size": {"min": 0, "default": 1},
-    "low_size": {"min": 0, "default": 3},
-    "nb_pulse": {"default": -1}
-  }
+  static var PARAMS = animation.enc_params({
+    # 'color' for the comet head (32-bit ARGB value), inherited from animation class
+    "back_color": {"default": 0x00000000},      # background color (transparent by default)
+    "pos": {"default": 0},                      # start of the pulse (in pixel)
+    "pulse_size": {"min": 0, "default": 1},     # number of pixels of the pulse
+    "low_size": {"min": 0, "default": 3},       # number of pixel until next pos - full cycle is 2 + 3
+    "nb_pulse": {"default": -1}                 # number of pulses, or `-1` for infinite
+  })
   
   # Render the crenel pattern to the provided frame buffer
   #
   # @param frame: FrameBuffer - The frame buffer to render to
-  # @param time_ms: int - Optional current time in milliseconds (defaults to self.engine.time_ms)
+  # @param time_ms: int - Current time in milliseconds
+  # @param strip_length: int - Length of the LED strip in pixels
   # @return bool - True if frame was modified, false otherwise
-  def render(frame, time_ms)
-    if !self.is_running || frame == nil
-      return false
-    end
-
-    # Auto-fix time_ms and start_time
-    time_ms = self._fix_time_ms(time_ms)
-
-    var pixel_size = frame.width
-    
+  def render(frame, time_ms, strip_length)
     # Access parameters via virtual members (automatically resolves ValueProviders)
     var back_color = self.back_color
     var pos = self.pos
@@ -58,8 +52,8 @@ class CrenelPositionAnimation : animation.animation
     var period = int(pulse_size + low_size)
     
     # Fill background if not transparent
-    if back_color != 0xFF000000
-      frame.fill_pixels(back_color)
+    if back_color != 0x00000000
+      frame.fill_pixels(frame.pixels, back_color)
     end
     
     # Ensure we have a meaningful period
@@ -85,7 +79,7 @@ class CrenelPositionAnimation : animation.animation
     end
     
     # Render pulses
-    while (pos < pixel_size) && (nb_pulse != 0)
+    while (pos < strip_length) && (nb_pulse != 0)
       var i = 0
       if pos < 0
         i = -pos
@@ -93,7 +87,7 @@ class CrenelPositionAnimation : animation.animation
       # Invariant: pos + i >= 0
       
       # Draw the pulse pixels
-      while (i < pulse_size) && (pos + i < pixel_size)
+      while (i < pulse_size) && (pos + i < strip_length)
         frame.set_pixel_color(pos + i, color)
         i += 1
       end
@@ -127,4 +121,4 @@ class CrenelPositionAnimation : animation.animation
   end
 end
 
-return {'crenel_position_animation': CrenelPositionAnimation}
+return {'crenel_animation': CrenelPositionAnimation}

@@ -5,7 +5,7 @@ print("Testing basic GradientAnimation functionality...")
 
 # Create LED strip and engine
 var strip = global.Leds(5)
-var engine = animation.animation_engine(strip)
+var engine = animation.create_engine(strip)
 
 # Test basic creation
 var gradient = animation.gradient_animation(engine)
@@ -25,12 +25,12 @@ assert(gradient.movement_speed == 50, "Should set movement speed")
 gradient.start(1000)
 assert(gradient.is_running == true, "Should be running")
 
-var result = gradient.update(1000)
-assert(result == true, "Should update successfully")
+gradient.update(1000)
+assert(gradient.is_running == true, "Should still be running after update")
 
 # Test rendering
 var frame = animation.frame_buffer(5, 1)
-result = gradient.render(frame, 1000)
+result = gradient.render(frame, 1000, engine.strip_length)
 assert(result == true, "Should render successfully")
 
 print("✓ Basic GradientAnimation test passed!")

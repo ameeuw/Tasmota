@@ -12,7 +12,7 @@ def test_noise_animation_basic()
   
   # Create LED strip and engine
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Test with default parameters
   var noise_anim = animation.noise_animation(engine)
@@ -32,7 +32,7 @@ def test_noise_animation_custom()
   
   # Create LED strip and engine
   var strip = global.Leds(20)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Test with custom parameters
   var noise_anim = animation.noise_animation(engine)
@@ -64,7 +64,7 @@ def test_noise_animation_parameters()
   
   # Create LED strip and engine
   var strip = global.Leds(15)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   var noise_anim = animation.noise_animation(engine)
   
@@ -91,7 +91,7 @@ def test_noise_animation_update_render()
   
   # Create LED strip and engine
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   var noise_anim = animation.noise_animation(engine)
   noise_anim.color = 0xFFFF0000
@@ -101,15 +101,17 @@ def test_noise_animation_update_render()
   var frame = animation.frame_buffer(10)
   
   # Start animation
+  # Note: When testing animations directly (not through engine_proxy), we must set start_time manually
+  noise_anim.start_time = 1000  # Set start_time manually for direct testing
   noise_anim.start(1000)
   assert(noise_anim.is_running == true, "Animation should be running after start")
   
   # Test update
-  var result = noise_anim.update(1500)
-  assert(result == true, "Update should return true for running animation")
+  noise_anim.update(1500)
+  assert(noise_anim.is_running == true, "Animation should still be running after update")
   
   # Test render
-  result = noise_anim.render(frame, 1500)
+  var result = noise_anim.render(frame, 1500, engine.strip_length)
   assert(result == true, "Render should return true for running animation")
   
   # Check that colors were set (should not all be black)
@@ -133,7 +135,7 @@ def test_noise_constructors()
   
   # Create LED strip and engine
   var strip = global.Leds(15)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Test noise_rainbow
   var rainbow_noise = animation.noise_rainbow(engine)
@@ -164,7 +166,7 @@ def test_noise_tostring()
   
   # Create LED strip and engine
   var strip = global.Leds(12)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   var noise_anim = animation.noise_animation(engine)
   noise_anim.scale = 75
@@ -188,7 +190,7 @@ def test_noise_integer_color_conversion()
   
   # Create LED strip and engine
   var strip = global.Leds(5)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   var noise_anim = animation.noise_animation(engine)
   

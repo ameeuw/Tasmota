@@ -7,7 +7,7 @@ print("=== Fire Animation Test ===")
 
 # Create engine and LED strip for testing
 var strip = global.Leds(30)  # Use built-in LED strip for testing
-var engine = animation.animation_engine(strip)
+var engine = animation.create_engine(strip)
 
 # Test 1: Basic Fire Animation Creation
 print("\n1. Testing basic fire animation creation...")
@@ -19,7 +19,6 @@ fire.flicker_amount = 100
 fire.cooling_rate = 55
 fire.sparking_rate = 120
 fire.priority = 255
-fire.name = "test_fire"
 
 print(f"Created fire animation: {fire}")
 print(f"Initial state - running: {fire.is_running}, priority: {fire.priority}")
@@ -78,7 +77,7 @@ var frame = animation.frame_buffer(30)
 frame.clear()
 
 # Render the fire animation
-var rendered = fire.render(frame, engine.time_ms)
+var rendered = fire.render(frame, engine.time_ms, engine.strip_length)
 print(f"Rendered to frame buffer: {rendered}")
 
 # Check that some pixels have been set (fire should create non-black pixels)
@@ -112,12 +111,10 @@ print("Set to solid red color")
 
 # Set back to fire palette
 var fire_palette = animation.rich_palette(engine)
-fire_palette.palette = animation.PALETTE_FIRE
-fire_palette.cycle_period = 5000
+fire_palette.colors = animation.PALETTE_FIRE
+fire_palette.period = 5000
 fire_palette.transition_type = 1  # Use sine transition (smooth)
 fire_palette.brightness = 255
-fire_palette.range_min = 0
-fire_palette.range_max = 255
 fire.color = fire_palette
 print("Set back to fire palette")
 
@@ -148,7 +145,7 @@ print("\n10. Testing edge cases...")
 
 # Very small strip
 var tiny_strip = global.Leds(1)
-var tiny_engine = animation.animation_engine(tiny_strip)
+var tiny_engine = animation.create_engine(tiny_strip)
 var tiny_fire = animation.fire_animation(tiny_engine)
 tiny_fire.intensity = 180
 tiny_fire.priority = 1
@@ -156,12 +153,12 @@ tiny_fire.start()
 tiny_engine.time_ms = current_time + 125
 tiny_fire.update(current_time + 125)
 var tiny_frame = animation.frame_buffer(1)
-tiny_fire.render(tiny_frame, tiny_engine.time_ms)
+tiny_fire.render(tiny_frame, tiny_engine.time_ms, tiny_engine.strip_length)
 print("Tiny fire (1 pixel) created and rendered successfully")
 
 # Zero intensity
 var dim_strip = global.Leds(10)
-var dim_engine = animation.animation_engine(dim_strip)
+var dim_engine = animation.create_engine(dim_strip)
 var dim_fire = animation.fire_animation(dim_engine)
 dim_fire.intensity = 0
 dim_fire.priority = 10
@@ -169,7 +166,7 @@ dim_fire.start()
 dim_engine.time_ms = current_time + 250
 dim_fire.update(current_time + 250)
 var dim_frame = animation.frame_buffer(10)
-dim_fire.render(dim_frame, dim_engine.time_ms)
+dim_fire.render(dim_frame, dim_engine.time_ms, dim_engine.strip_length)
 print("Dim fire (0 intensity) created and rendered successfully")
 
 print("\n=== Fire Animation Test Complete ===")

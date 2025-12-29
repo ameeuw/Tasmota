@@ -12,17 +12,10 @@
 # - All other parameters set via virtual member assignment
 # - No setter/getter methods for parameters
 
+import "./core/param_encoder" as encode_constraints
+
 #@ solidify:ValueProvider,weak
 class ValueProvider : animation.parameterized_object
-  # Static parameter definitions - can be overridden by subclasses
-  static var PARAMS = {}
-  
-  # Initialize the value provider
-  #
-  # @param engine: AnimationEngine - Reference to the animation engine (required)
-  def init(engine)
-    super(self).init(engine)  # Initialize parameter system
-  end
   
   # Produce a value for a specific parameter name and time
   # This is the main method that subclasses should override
