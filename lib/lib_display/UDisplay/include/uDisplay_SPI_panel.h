@@ -8,6 +8,11 @@
 #include "uDisplay_panel.h"
 #include "uDisplay_SPI_controller.h"
 
+enum UDisplayMonoPackFlags : uint8_t {
+    UDISP_MONO_PACK_INVERT = 1 << 0,
+    UDISP_MONO_PACK_REVERSE_Y = 1 << 1,
+};
+
 typedef struct LVGL_PARAMS_t {
   uint16_t flushlines;
   union {
@@ -40,6 +45,13 @@ struct SPIPanelConfig {
     uint8_t cmd_set_addr_x;   // Command to set X address range
     uint8_t cmd_set_addr_y;   // Command to set Y address range  
     uint8_t cmd_write_ram;    // Command to write pixel data
+    uint8_t ram_x_start;      // Optional full-frame RAM window for packed mono modes
+    uint8_t ram_x_end;
+    uint8_t ram_y_start;
+    uint8_t ram_y_end;
+    uint8_t mono_pack_width;  // Optional descriptor-selected 1bpp transfer packing
+    uint8_t mono_pack_height;
+    uint8_t mono_pack_flags;
 
     // ===== Display Control Commands =====
     uint8_t cmd_display_on;
@@ -78,7 +90,7 @@ public:
     // ===== UniversalPanel Interface =====
     bool drawPixel(int16_t x, int16_t y, uint16_t color) override;
     bool fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) override;
-    bool pushColors(uint16_t *data, uint16_t len, bool not_swapped = false) override;
+    bool pushColors(uint16_t *data, uint32_t len, bool not_swapped = false) override;
     bool setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) override;
     bool drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) override;
     bool drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) override;
@@ -98,6 +110,8 @@ private:
 
     // ===== Display State =====
     uint8_t rotation;              // Current rotation (0-3)
+    uint16_t width;                // Current width
+    uint16_t height;               // Current height
     int16_t window_x0, window_y0, window_x1, window_y1;
     bool display_on;
     bool inverted;
@@ -105,6 +119,9 @@ private:
     bool use_hw_spi = false;
 
     // ===== Internal Helpers =====
+    bool hasPackedMono() const;
+    bool updateFramePackedMono();
+    uint8_t getMonoPixel(int16_t x, int16_t y) const;
     void setAddrWindow_internal(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
     void sendAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
     void sendCommand(uint8_t cmd);

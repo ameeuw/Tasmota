@@ -553,11 +553,17 @@ void DisplayText(void)
             break;
           case 'i':
             // init display with partial update
-            DisplayInit(DISPLAY_INIT_PARTIAL);
+            //DisplayInit(DISPLAY_INIT_PARTIAL);
+            if (renderer) {
+              renderer->DisplayInit(DISPLAY_INIT_PARTIAL, Settings->display_size, Settings->display_rotate, Settings->display_font);
+            }
             break;
           case 'I':
             // init display with full refresh
-            DisplayInit(DISPLAY_INIT_FULL);
+            //DisplayInit(DISPLAY_INIT_FULL);
+            if (renderer) {
+              renderer->DisplayInit(DISPLAY_INIT_FULL, Settings->display_size, Settings->display_rotate, Settings->display_font);
+            }
             break;
           case 'o':
             DisplayOnOff(0);
@@ -1373,8 +1379,8 @@ void define_dt_var(uint32_t num, uint32_t xp, uint32_t yp,  uint32_t txtbcol,  u
     return;
   }
   dtp->rstr[0] = 0;
-  strcpy(dtp->unit, unit);
-  strcpy(dtp->jstrbuf, jstr);
+  strlcpy(dtp->unit, unit, sizeof(dtp->unit));
+  strlcpy(dtp->jstrbuf, jstr, jlen+2);
   if (!time) time = 1;
   dtp->timer = time;
 }
@@ -1392,9 +1398,9 @@ void draw_dt_vars(void) {
           dtp->timer = dtp->time;
           char vstr[MAX_DVTSIZE + 7];
           memset(vstr, ' ', sizeof(vstr));
-          strcpy(vstr, dtp->rstr);
-          strcat(vstr, " ");
-          strcat(vstr, dtp->unit);
+          strlcpy(vstr, dtp->rstr, sizeof(vstr));
+          strlcat(vstr, " ", sizeof(vstr));
+          strlcat(vstr, dtp->unit, sizeof(vstr));
           uint16_t slen = strlen(vstr);
           vstr[slen] = ' ';
 
@@ -1482,7 +1488,7 @@ void get_dt_vars(char *json) {
           if (res) {
             if (dt_vars[cnt]->dp < 0) {
               // use string
-              strcpy(dt_vars[cnt]->rstr, sbuf);
+              strlcpy(dt_vars[cnt]->rstr, sbuf, sizeof(dt_vars[cnt]->rstr));
             } else {
               // convert back and forth
               dtostrfd(CharToFloat(sbuf), dt_vars[cnt]->dp, dt_vars[cnt]->rstr);
@@ -1702,7 +1708,7 @@ const char kSensorUnit[] PROGMEM =
   D_UNIT_PARTS_PER_MILLION "|"                                                  // ppm
   D_UNIT_HERTZ;                                                                 // Hz
 
-void DisplayJsonValue(const char* topic, const char* device, const char* mkey, const char* value) {
+void DisplayJsonValue(const char* topic, const char* mkey, const char* value) {
   SHOW_FREE_MEM(PSTR("DisplayJsonValue"));
 
   char temp[TOPSZ];
@@ -1726,7 +1732,7 @@ void DisplayJsonValue(const char* topic, const char* device, const char* mkey, c
   uint32_t size = strlen(topic);
   if ((Settings->display_rows > 4) && size) {                             // Skip header if less than five rows
     if (strcmp(topic, disp_topic)) {                                      // Show topic header only once
-      strcpy(disp_topic, topic);
+      strlcpy(disp_topic, topic, sizeof(disp_topic));
       char buffer2[Settings->display_cols[0] +1];                         // Max sized buffer string
       memset(buffer2, '-', sizeof(buffer2));                              // Set to -
       buffer2[sizeof(buffer2) -1] = '\0';
@@ -1741,10 +1747,24 @@ void DisplayJsonValue(const char* topic, const char* device, const char* mkey, c
   snprintf_P(source, sizeof(source), PSTR("%s%s%s%s"), (size)?topic:"", (size)?"/":"", mkey, buffer);  // pow1/Voltage or Voltage if topic is empty (local sensor or header)
   snprintf_P(buffer, sizeof(buffer), PSTR("%s %s"), source, svalue);
 
-//  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "topic [%s], device [%s], mkey [%s], source [%s], value [%s], quantity_code %d, log_buffer [%s]"),
-//    topic, device, mkey, source, value, quantity_code, buffer);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "topic [%s], mkey [%s], source [%s], value [%s], quantity_code %d, log_buffer [%s]"),
+//    topic, mkey, source, value, quantity_code, buffer);
 
   DisplayLogBufferAdd(buffer);
+}
+
+void DisplayAnalyzeJsonObject(const char *topic, JsonParserObject Object) {
+  for (auto key : Object) {
+    JsonParserToken value = key.getValue();
+    if (value.isObject()) {
+      DisplayAnalyzeJsonObject(topic, value.getObject());
+    } else {
+      const char* values = value.getStr(nullptr);
+      if (values != nullptr) {
+        DisplayJsonValue(topic, key.getStr(), values);  // Sensor 56%
+      }
+    }
+  }
 }
 
 void DisplayAnalyzeJson(char *topic, const char *json) {
@@ -1771,34 +1791,8 @@ void DisplayAnalyzeJson(char *topic, const char *json) {
     if (unit) {
       snprintf_P(disp_pres, sizeof(disp_pres), PSTR("%s"), unit);  // hPa or mmHg
     }
-    for (auto key1 : root) {
-      JsonParserToken value1 = key1.getValue();
-      if (value1.isObject()) {
-        JsonParserObject Object2 = value1.getObject();
-        for (auto key2 : Object2) {
-          JsonParserToken value2 = key2.getValue();
-          if (value2.isObject()) {
-            JsonParserObject Object3 = value2.getObject();
-            for (auto key3 : Object3) {
-              const char* value3 = key3.getValue().getStr(nullptr);
-              if (value3 != nullptr) {  // "DHT11":{"Temperature":null,"Humidity":null} - ignore null as it will raise exception 28
-                DisplayJsonValue(topic, key1.getStr(), key3.getStr(), value3);  // Sensor 56%
-              }
-            }
-          } else {
-            const char* value = value2.getStr(nullptr);
-            if (value != nullptr) {
-              DisplayJsonValue(topic, key1.getStr(), key2.getStr(), value);  // Sensor  56%
-            }
-          }
-        }
-      } else {
-        const char* value = value1.getStr(nullptr);
-        if (value != nullptr) {
-          DisplayJsonValue(topic, key1.getStr(), key1.getStr(), value);  // Topic  56%
-        }
-      }
-    }
+
+    DisplayAnalyzeJsonObject(topic, root);
   }
 }
 
@@ -2381,7 +2375,7 @@ void DisplayReInitDriver(void) {
 // very limited path size, so, add .jpg
 void draw_picture(char *path, uint32_t xp, uint32_t yp, uint32_t xs, uint32_t ys, uint32_t ocol, bool inverted) {
 char ppath[16];
-  strcpy(ppath, path);
+  strlcpy(ppath, path, sizeof(ppath));
   uint8_t plen = strlen(path) -1;
   if (ppath[plen]=='1') {
     // index mode
@@ -2391,9 +2385,9 @@ char ppath[16];
     inverted = false;
   }
   if (ocol == 9) {
-    strcat(ppath, ".rgb");
+    strlcat(ppath, ".rgb", sizeof(ppath));
   } else {
-    strcat(ppath, ".jpg");
+    strlcat(ppath, ".jpg", sizeof(ppath));
   }
   Draw_RGB_Bitmap(ppath, xp, yp, 0, inverted, 0, 0);
 }
@@ -2402,10 +2396,18 @@ char ppath[16];
 
 #ifdef ESP32
 #ifdef JPEG_PICTS
+
+#define USE_NEW_JPG
 #include "img_converters.h"
 #include "jpeg_decoder.h"
+
+#ifndef USE_NEW_JPG
+#include "esp_jpg_decode.h"
 bool jpg2rgb888(const uint8_t *src, size_t src_len, uint8_t * out, jpg_scale_t scale);
 bool jpg2rgb565(const uint8_t *src, size_t src_len, uint8_t * out, jpg_scale_t scale);
+#endif
+
+
 char get_jpeg_size(unsigned char* data, unsigned int data_size, unsigned short *width, unsigned short *height);
 #endif // JPEG_PICTS
 #endif // ESP32
@@ -2511,12 +2513,33 @@ void Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
           }
           //Serial.printf(" x,y,fs %d - %d - %d\n",xsize, ysize, size );
           if (xsize && ysize) {
+#ifdef USE_NEW_JPG
+            uint16_t *out_buf = (uint16_t *)special_malloc((xsize * ysize * 2) + 4);
+            if (out_buf) {
+              uint32_t outsize = xsize * ysize * 2;
+              esp_jpeg_image_cfg_t jpeg_cfg = {
+                .indata = (uint8_t *)mem,
+                .indata_size = size,
+                .outbuf = (uint8_t*)out_buf,
+                .outbuf_size = outsize,
+                .out_format = JPEG_IMAGE_FORMAT_RGB565,
+                .out_scale = JPEG_IMAGE_SCALE_0,
+                .flags = {  .swap_color_bytes = inverted,}
+              };
+              esp_jpeg_image_output_t outimg;
+              esp_jpeg_decode(&jpeg_cfg, &outimg);
+              renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
+              renderer->pushColors(out_buf, outsize / 2, true);
+              renderer->setAddrWindow(0, 0, 0, 0);
+              free(out_buf);
+            }
+#else
             uint8_t *out_buf = (uint8_t *)special_malloc((xsize * ysize * 3) + 4);
             if (out_buf) {
               uint16_t *pixb = (uint16_t *)special_malloc((xsize * 2) + 4);
               if (pixb) {
                 uint8_t *ob = out_buf;
-                if (jpg2rgb888(mem, size, out_buf, (jpg_scale_t)JPG_SCALE_NONE)) {
+                if (jpg2rgb888(mem, size, out_buf, (jpg_scale_t)JPG_SCALE_NONE)) {                  
                   //renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
                   for (int32_t j = 0; j < ysize; j++) {
                     if (inverted == false) {
@@ -2537,6 +2560,7 @@ void Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
                 free(out_buf);
               }
             }
+#endif
           }
         }
         free(mem);
@@ -2564,14 +2588,40 @@ void Draw_jpeg(uint8_t *mem, uint16_t jpgsize, uint16_t xp, uint16_t yp, uint8_t
     uint8_t fac = 1 << scale;
     xsize /= fac;
     ysize /= fac;
-    renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
-    uint8_t *rgbmem = (uint8_t *)special_malloc(xsize * ysize * 2);
+
+#ifdef USE_NEW_JPG
+    uint32_t osize = xsize * ysize * 2;
+    uint16_t *rgbmem = (uint16_t *)special_malloc(osize);
     if (rgbmem) {
-      //jpg2rgb565(mem, jpgsize, rgbmem, JPG_SCALE_NONE);
-      jpg2rgb565(mem, jpgsize, rgbmem, (jpg_scale_t)scale);
-      renderer->pushColors((uint16_t*)rgbmem, xsize * ysize, true);
+      esp_jpeg_image_cfg_t jpeg_cfg = {
+                .indata = (uint8_t *)mem,
+                .indata_size = jpgsize,
+                .outbuf = (uint8_t*)rgbmem,
+                .outbuf_size = osize,
+                .out_format = JPEG_IMAGE_FORMAT_RGB565,
+                .out_scale = (esp_jpeg_image_scale_t)scale,
+                .flags = {  .swap_color_bytes = 0,}
+              };
+      esp_jpeg_image_output_t outimg;
+      esp_jpeg_decode(&jpeg_cfg, &outimg);
+      renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
+      renderer->pushColors(rgbmem, osize / 2, true);
       free(rgbmem);
     }
+#else
+    
+    uint8_t *rgbmem = (uint8_t *)special_malloc(xsize * ysize * 2);
+    if (rgbmem) {     
+      jpg2rgb565(mem, jpgsize, rgbmem, (jpg_scale_t)scale);
+      uint16_t *ob = (uint16_t*)rgbmem;
+      for (int32_t j = 0; j < ysize; j++) {
+        renderer->setAddrWindow(xp, yp + j, xp + xsize, yp + j + 1);
+        renderer->pushColors((uint16_t*)ob, xsize, true);
+        ob += xsize;
+      }
+      free(rgbmem);
+    }
+#endif
     renderer->setAddrWindow(0, 0, 0, 0);
   }
 }

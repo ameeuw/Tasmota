@@ -86,7 +86,16 @@ BERRY_API void be_writebuffer(const char *buffer, size_t length)
             }
         }
         uint32_t chars_to_append = (cr_pos >= 0) ? cr_pos - idx : length - idx;     // note cr_pos < length
-        snprintf(log_berry_buffer, BERRY_LOGSZ, "%s%.*s", log_berry_buffer, chars_to_append, &buffer[idx]);   // append at most `length` chars
+        // Append to log_berry_buffer. We must not pass log_berry_buffer as both the
+        // destination and a "%s" source of snprintf (that aliasing is undefined behavior).
+        // On ESP32 there is no separate PROGMEM address space, so a plain memcpy is safe.
+        size_t cur_len = strlen(log_berry_buffer);
+        if (cur_len < BERRY_LOGSZ - 1) {
+            size_t space = BERRY_LOGSZ - 1 - cur_len;
+            size_t to_copy = (chars_to_append < space) ? chars_to_append : space;
+            memcpy(log_berry_buffer + cur_len, &buffer[idx], to_copy);
+            log_berry_buffer[cur_len + to_copy] = 0;
+        }
         if (cr_pos >= 0) {
             // flush
             berry_log(log_berry_buffer);
@@ -100,6 +109,57 @@ BERRY_API void be_writebuffer(const char *buffer, size_t length)
 
 // provides MPATH_ constants
 #include "be_port.h"
+
+#ifdef USE_UFILESYS
+// Callback context for listing archive files
+struct ZipListContext {
+    bvm *vm;
+};
+
+// Callback function for ZipArchiveIterator
+static bool _zip_list_callback(const char *filename, void *user_data) {
+    ZipListContext *ctx = (ZipListContext *)user_data;
+    be_pushstring(ctx->vm, filename);
+    be_data_push(ctx->vm, -2);
+    be_pop(ctx->vm, 1);
+    return true;  // continue iteration
+}
+
+// Helper function to list files in a ZIP archive
+// Returns true if the path ends with '#' and archive listing was attempted
+// The list object should already be on the Berry stack
+static bool _be_list_archive_files(bvm *vm, const char *path) {
+    size_t path_len = strlen(path);
+    if (path_len == 0 || path[path_len - 1] != '#') {
+        return false;  // not an archive path
+    }
+
+    // Extract the archive path (without the trailing '#')
+    char archive_path[path_len + 2];
+    if (path[0] == '/') {
+        strncpy(archive_path, path, path_len - 1);
+        archive_path[path_len - 1] = '\0';
+    } else {
+        archive_path[0] = '/';
+        strncpy(archive_path + 1, path, path_len - 1);
+        archive_path[path_len] = '\0';
+    }
+
+    // Open the archive file
+    File zipfile = ffsp->open(archive_path, "r");
+    if (!zipfile) {
+        return true;  // path ends with '#' but archive not found, return empty list
+    }
+
+    // Use ZipArchiveIterator from Zip-readonly-FS module
+    ZipListContext ctx = { vm };
+    ZipArchiveIterator(zipfile, _zip_list_callback, &ctx);
+
+    zipfile.close();
+    return true;
+}
+#endif // USE_UFILESYS
+
 extern "C" {
     // this combined action is called from be_path_tasmota_lib.c
     // by using a single function, we save >200 bytes of flash
@@ -147,8 +207,14 @@ extern "C" {
                         }
                         break;
                     case MPATH_LISTDIR:
-                        be_newobject(vm, "list"); // add our list object and fall through
+                        be_newobject(vm, "list"); // add our list object
                         returnit = 1;
+                        // Check if path ends with '#' for archive listing
+                        if (_be_list_archive_files(vm, path)) {
+                            // Archive listing handled, skip normal directory listing
+                            break;
+                        }
+                        // Fall through to normal directory listing
                     case MPATH_ISDIR:
                     case MPATH_MODIFIED: {
                         //isdir needs to open the file, listdir does not
@@ -238,7 +304,6 @@ void* be_fopen(const char *filename, const char *modes)
         File f = zip_ufsp.open(fname2, modes);       // returns an object, not a pointer
         if (f) {
             File * f_ptr = new File(f);                 // copy to dynamic object
-            *f_ptr = f;                                 // TODO is this necessary?
             return f_ptr;
         }
     }

@@ -1,4 +1,4 @@
-# Test for RichPaletteColorProvider dynamic brightness
+# Test for rich_palette_color dynamic brightness
 #
 # This test verifies that brightness can change over time without
 # invalidating the LUT cache, which is critical for animations
@@ -14,7 +14,7 @@ end
 # Create a test engine
 var engine = animation.init_strip()
 
-log("=== RichPaletteColorProvider Dynamic Brightness Test ===")
+log("=== rich_palette_color Dynamic Brightness Test ===")
 log("")
 
 # Test 1: Verify brightness changes don't invalidate LUT
@@ -28,7 +28,7 @@ var rgb_palette = bytes(
   "FFFFFF00"    # Value 255: Yellow
 )
 
-var provider = animation.rich_palette(engine)
+var provider = animation.rich_palette_color(engine)
 provider.colors = rgb_palette
 provider.period = 0  # Static mode
 
@@ -142,7 +142,7 @@ log("Test 4: LUT rebuild verification")
 log("---------------------------------")
 
 # Create a fresh provider
-var rebuild_provider = animation.rich_palette(engine)
+var rebuild_provider = animation.rich_palette_color(engine)
 rebuild_provider.colors = rgb_palette
 rebuild_provider.period = 0
 
@@ -163,7 +163,7 @@ rebuild_provider.get_color_for_value(128, 0)
 log(f"After lookup with new palette: lut_dirty = {rebuild_provider._lut_dirty}")
 
 # Change transition_type - SHOULD trigger rebuild
-rebuild_provider.transition_type = animation.SINE
+rebuild_provider.transition_type = 5 #-SINE-#
 log(f"After transition_type change: lut_dirty = {rebuild_provider._lut_dirty}")
 rebuild_provider.get_color_for_value(128, 0)
 log(f"After lookup with new transition: lut_dirty = {rebuild_provider._lut_dirty}")

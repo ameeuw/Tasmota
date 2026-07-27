@@ -32,6 +32,9 @@ extern int lvbe_theme_create(bvm *vm);
 // adding ad-hoc colorwheel from LVGL8 to LVGL9
 extern const lv_obj_class_t lv_colorwheel_class;
 
+// custom Tasmota widget: rectangle filled with an angled stripe pattern
+extern const lv_obj_class_t lv_stripes_class;
+
 
 extern int be_ntv_lv_style_init(bvm *vm);
 extern int be_ntv_lv_font_init(bvm *vm);
@@ -47,6 +50,7 @@ extern int be_ntv_lv_anim_init(bvm *vm);
 extern int be_ntv_lv_timer_init(bvm *vm);
 extern int be_ntv_lv_animimg_init(bvm *vm);
 extern int be_ntv_lv_arc_init(bvm *vm);
+extern int be_ntv_lv_arclabel_init(bvm *vm);
 extern int be_ntv_lv_bar_init(bvm *vm);
 extern int be_ntv_lv_button_init(bvm *vm);
 extern int be_ntv_lv_buttonmatrix_init(bvm *vm);
@@ -82,10 +86,12 @@ extern int be_ntv_lv_tabview_init(bvm *vm);
 extern int be_ntv_lv_textarea_init(bvm *vm);
 extern int be_ntv_lv_tileview_init(bvm *vm);
 extern int be_ntv_lv_colorwheel_init(bvm *vm);
+extern int be_ntv_lv_stripes_init(bvm *vm);
 
 extern const bclass be_class_lv_anim;
 extern const bclass be_class_lv_animimg;
 extern const bclass be_class_lv_arc;
+extern const bclass be_class_lv_arclabel;
 extern const bclass be_class_lv_bar;
 extern const bclass be_class_lv_button;
 extern const bclass be_class_lv_buttonmatrix;
@@ -124,6 +130,7 @@ extern const bclass be_class_lv_span;
 extern const bclass be_class_lv_spangroup;
 extern const bclass be_class_lv_spinbox;
 extern const bclass be_class_lv_spinner;
+extern const bclass be_class_lv_stripes;
 extern const bclass be_class_lv_style;
 extern const bclass be_class_lv_switch;
 extern const bclass be_class_lv_table;
@@ -312,6 +319,17 @@ class be_class_lv_animimg (scope: global, name: lv_animimg, super: be_class_lv_i
 class be_class_lv_arc (scope: global, name: lv_arc, super: be_class_lv_obj, strings: weak) {
     init, func(be_ntv_lv_arc_init)
     _class, comptr(&lv_arc_class)
+}
+@const_object_info_end */
+
+/********************************************************************
+** Solidified class: lv_arclabel
+********************************************************************/
+#include "be_fixed_be_class_lv_arclabel.h"
+/* @const_object_info_begin
+class be_class_lv_arclabel (scope: global, name: lv_arclabel, super: be_class_lv_obj, strings: weak) {
+    init, func(be_ntv_lv_arclabel_init)
+    _class, comptr(&lv_arclabel_class)
 }
 @const_object_info_end */
 
@@ -698,6 +716,17 @@ class be_class_lv_tileview (scope: global, name: lv_tileview, super: be_class_lv
 class be_class_lv_colorwheel (scope: global, name: lv_colorwheel, super: be_class_lv_obj, strings: weak) {
     init, func(be_ntv_lv_colorwheel_init)
     _class, comptr(&lv_colorwheel_class)
+}
+@const_object_info_end */
+
+/********************************************************************
+** Solidified class: lv_stripes
+********************************************************************/
+#include "be_fixed_be_class_lv_stripes.h"
+/* @const_object_info_begin
+class be_class_lv_stripes (scope: global, name: lv_stripes, super: be_class_lv_obj, strings: weak) {
+    init, func(be_ntv_lv_stripes_init)
+    _class, comptr(&lv_stripes_class)
 }
 @const_object_info_end */
 

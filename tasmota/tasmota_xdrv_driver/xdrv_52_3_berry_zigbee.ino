@@ -316,7 +316,7 @@ extern "C" {
 
   extern const be_ctypes_structure_t be_zigbee_zcl_attribute_struct = {
     sizeof(Z_attribute),  /* size in bytes */
-    11,  /* number of elements */
+    12,  /* number of elements, elements are in sorted order */
     nullptr,
     (const be_ctypes_structure_item_t[12]) {
       { "_attr_id", offsetof(Z_attribute, attr_id), 0, 0, ctypes_u16, 0 },
@@ -361,7 +361,7 @@ extern "C" {
   void zfn_set_bytes(void* sbuf_ptr, const uint8_t* bytes, size_t len_bytes) {
     if (sbuf_ptr == NULL || bytes == NULL) { return; }
 
-    SBuffer &sbuf = (SBuffer&) sbuf_ptr;
+    SBuffer& sbuf = *reinterpret_cast<SBuffer*>(sbuf_ptr);  // Cast pointer first, then dereference
 
     sbuf.reserve(len_bytes);  // make sure it's large enough
     sbuf.setLen(0);           // clear content
