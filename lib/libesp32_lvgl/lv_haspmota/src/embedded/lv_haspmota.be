@@ -1185,12 +1185,17 @@ class lvh_obj : lvh_root
 
   #- ------------------------------------------------------------#
   # `setmember` virtual setter
+  #
+  # accepts an optional `lv_obj` if the target is not the same as `self._lv_obj`
   #- ------------------------------------------------------------#
-  def setmember(k, v)
+  def setmember(k, v, lv_obj)
     import string
     import introspect
 
     if string.startswith(k, "set_") || string.startswith(k, "get_")   return end
+    if lv_obj == nil
+      lv_obj = self._lv_obj
+    end
 
     # if value is 'real', round to nearest int
     if type(v) == 'real'
@@ -1239,19 +1244,19 @@ class lvh_obj : lvh_root
     
     # try first `set_X` from lvgl object
     if (style_modifier == nil)
-      f = introspect.get(self._lv_obj, "set_" + k)
+      f = introspect.get(lv_obj, "set_" + k)
       if type(f) == 'function'                  # found and function, call it
         # print(f">>>: setmember standard method set_{k}")
-        return f(self._lv_obj, v)
+        return f(lv_obj, v)
       end
     end
 
     # if not found, try `set_style_X`
-    f = introspect.get(self._lv_obj, "set_style_" + k)
+    f = introspect.get(lv_obj, "set_style_" + k)
     if type(f) == 'function'                  # found and function, call it
       # print(f">>>: setmember style_ method set_{k}")
       # style function need a selector as second parameter
-      return f(self._lv_obj, v, style_modifier != nil ? style_modifier : 0)
+      return f(lv_obj, v, style_modifier != nil ? style_modifier : 0)
     end
 
     print("HSP: unknown attribute:", k)
@@ -1614,11 +1619,31 @@ class lvh_img : lvh_obj
   end
   def get_auto_size() end
   def set_angle(v)
-    v = int(v)
-    self._lv_obj.set_angle(v)
+    # set center
+    self._lv_obj.set_style_transform_pivot_x(self._lv_obj.get_width() / 2, 0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)
+    self._lv_obj.set_style_transform_pivot_y(self._lv_obj.get_height() / 2, 0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)
+    # set angle via rotation
+    self._lv_obj.set_style_transform_rotation(int(v), 0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)
   end
   def get_angle()
-    return self._lv_obj.get_angle()
+    return self._lv_obj.get_style_transform_rotation(0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)
+  end
+  def set_scale(v)
+    # set center
+    self._lv_obj.set_style_transform_pivot_x(self._lv_obj.get_width() / 2, 0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)
+    self._lv_obj.set_style_transform_pivot_y(self._lv_obj.get_height() / 2, 0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)
+    # set angle via rotation
+    self._lv_obj.set_style_transform_scale(int(v), 0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)
+  end
+  def get_scale()
+    return (self._lv_obj.get_style_transform_scale_x(0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#) +
+            self._lv_obj.get_style_transform_scale_y(0 #-lv.PART_MAIN | lv.STATE_DEFAULT-#)) / 2
+  end
+  def set_zoom(v)
+    self.set_scale(v)
+  end
+  def get_zoom()
+    return self.get_scale()
   end
   #- ------------------------------------------------------------#
   # `src` virtual setter
@@ -2655,6 +2680,11 @@ class lvh_cpicker : lvh_obj
   # pad_inner is ignored (for now?)
   def set_pad_inner() end
   def get_pad_inner() end
+
+  # map val to rgb which is mapped to a color instance
+  def get_val()
+    return self._lv_obj.get_rgb()
+  end
 end
 
 #################################################################################
@@ -2684,6 +2714,27 @@ end
 #@ solidify:lvh_scr,weak
 class lvh_scr : lvh_obj
   static var _lv_class = nil    # no class for screen
+
+  def setmember(k, v)
+    import string
+
+    if string.startswith(k, "bg_")
+      var page = self._page
+      if page._page_id == 0 && page._lv_scr_bottom != nil
+        return super(self).setmember(k, v, page._lv_scr_bottom)
+      else
+        # special case when we set `bg_color` and `bg_opa` is `0`, then we force opacity
+        if k == "bg_color" && self._lv_obj.get_style_bg_opa(0) == 0
+          self._lv_obj.set_style_bg_opa(255, 0)
+        end
+      end
+    end
+    return super(self).setmember(k, v)
+  end
+
+  # def set_bg_color(a,b,c)
+  #   log(f">>>: lvh_scr.set_bg_color {a=} {b=} {c=}")
+  # end
 end
 
 
@@ -2693,12 +2744,13 @@ end
 #  Encapsulates a `lv_screen` which is `lv.obj(0)` object
 #################################################################################
 #
-# ex of transition: lv.scr_load_anim(scr, lv.SCR_LOAD_ANIM_MOVE_RIGHT, 500, 0, false)
+# ex of transition: lv.scr_load_anim(scr, lv.SCREEN_LOAD_ANIM_MOVE_RIGHT, 500, 0, false)
 #@ solidify:lvh_page,weak
 class lvh_page
   var _obj_id               # (map) of `lvh_obj` objects by id numbers
   var _page_id              # (int) id number of this page
   var _lv_scr               # (lv_obj) lvgl screen object
+  var _lv_scr_bottom        # (lv_obj) lvgl screen object for background
   var _hm                   # HASPmota global object
   # haspmota attributes for page are on item `#0`
   var prev, next, back      # (int) id values for `prev`, `next`, `back` buttons
@@ -2728,8 +2780,13 @@ class lvh_page
     # page 1 is mapped directly to the default screen `scr_act`
     if page_number == 0
       self._lv_scr = lv.layer_top() # top layer, visible over all screens
+      self._lv_scr_bottom = lv.layer_bottom() # bottom layer, used to set background colors
+      # set top transparent and bottom opaque
+      self._lv_scr.set_style_bg_opa(0, 0)
+      self._lv_scr_bottom.set_style_bg_opa(255, 0)
     else
       self._lv_scr = lv.obj(0)      # allocate a new screen
+      self._lv_scr.set_style_bg_opa(0, 0) # force new screen to transparent, unless its color is decided
     end
 
     # page object is also stored in the object map at id `0` as instance of `lvg_scr`
@@ -2817,7 +2874,7 @@ class lvh_page
   end
 
   #====================================================================
-  #  `delete` special attribute used to delete the object
+  #  `clear` special attribute
   #====================================================================
   def get_clear()
     self._clear()
@@ -2843,6 +2900,9 @@ class lvh_page
     end
     self._obj_id = {}       # clear map
   end
+  #====================================================================
+  #  `delete` special attribute used to delete the object
+  #====================================================================
   def get_delete()
     self._delete()
     return def () end
@@ -2862,11 +2922,11 @@ class lvh_page
   #  show this page, with animation
   #====================================================================
   static show_anim = {
-     1: lv.SCR_LOAD_ANIM_MOVE_LEFT,
-    -1: lv.SCR_LOAD_ANIM_MOVE_RIGHT,
-    -2: lv.SCR_LOAD_ANIM_MOVE_TOP,
-     2: lv.SCR_LOAD_ANIM_MOVE_BOTTOM,
-     0: lv.SCR_LOAD_ANIM_NONE,
+     1: lv.SCREEN_LOAD_ANIM_MOVE_LEFT,
+    -1: lv.SCREEN_LOAD_ANIM_MOVE_RIGHT,
+    -2: lv.SCREEN_LOAD_ANIM_MOVE_TOP,
+     2: lv.SCREEN_LOAD_ANIM_MOVE_BOTTOM,
+     0: lv.SCREEN_LOAD_ANIM_NONE,
   }
   def show(anim, duration)
     # ignore if the page does not contain a screen, like when id==0
@@ -2896,7 +2956,7 @@ class lvh_page
     if (anim == 0)
       lv.screen_load(self._lv_scr)
     else    # animation
-      var anim_lvgl = self.show_anim.find(anim, lv.SCR_LOAD_ANIM_NONE)
+      var anim_lvgl = self.show_anim.find(anim, lv.SCREEN_LOAD_ANIM_NONE)
       # load new screen with animation, no delay, 500ms transition time, no auto-delete
       lv.screen_load_anim(self._lv_scr, anim_lvgl, duration, 0, false)
     end
@@ -3056,18 +3116,24 @@ class HASPmota
     end
 
     # set the theme for HASPmota
-    var primary_color = self.lvh_root.parse_color(tasmota.webcolor(10 #-COL_BUTTON-#))
-    var secondary_color = self.lvh_root.parse_color(tasmota.webcolor(11 #-COL_BUTTON_HOVER-#))
-    var color_scr = self.lvh_root.parse_color(tasmota.webcolor(1 #-COL_BACKGROUND-#))
+    # var primary_color = self.lvh_root.parse_color(tasmota.webcolor(10 #-COL_BUTTON-#))
+    # var secondary_color = self.lvh_root.parse_color(tasmota.webcolor(11 #-COL_BUTTON_HOVER-#))
+    var primary_color = lv.color(0x1FA3EC)
+    var secondary_color = lv.color(0x0E70A4)
+    # var color_scr = self.lvh_root.parse_color(tasmota.webcolor(1 #-COL_BACKGROUND-#))
+    var color_scr = lv.color(0x000088)
     var color_text = self.lvh_root.parse_color(tasmota.webcolor(9 #-COL_BUTTON_TEXT-#))
-    var color_card = self.lvh_root.parse_color(tasmota.webcolor(2 #-COL_FORM-#))
-    var color_grey = self.lvh_root.parse_color(tasmota.webcolor(2 #-COL_FORM-#))
-    var color_reset = self.lvh_root.parse_color(tasmota.webcolor(12 #-COL_BUTTON_RESET-#))
-    var color_reset_hover = self.lvh_root.parse_color(tasmota.webcolor(13 #-COL_BUTTON_RESET_HOVER-#))
-    var color_save = self.lvh_root.parse_color(tasmota.webcolor(14 #-COL_BUTTON_SAVE-#))
-    var color_save_hover = self.lvh_root.parse_color(tasmota.webcolor(15 #-COL_BUTTON_SAVE_HOVER-#))
-    var colors = lv.color_arr([primary_color, secondary_color, color_scr, color_text, color_card, color_grey,
-                               color_reset, color_reset_hover, color_save, color_save_hover])
+    # var color_card = self.lvh_root.parse_color(tasmota.webcolor(2 #-COL_FORM-#))
+    # var color_grey = self.lvh_root.parse_color(tasmota.webcolor(2 #-COL_FORM-#))
+    var color_card = lv.color(0x000044)
+    var color_grey = lv.color(0x4F4F4F)
+    # var color_reset = self.lvh_root.parse_color(tasmota.webcolor(12 #-COL_BUTTON_RESET-#))
+    # var color_reset_hover = self.lvh_root.parse_color(tasmota.webcolor(13 #-COL_BUTTON_RESET_HOVER-#))
+    # var color_save = self.lvh_root.parse_color(tasmota.webcolor(14 #-COL_BUTTON_SAVE-#))
+    # var color_save_hover = self.lvh_root.parse_color(tasmota.webcolor(15 #-COL_BUTTON_SAVE_HOVER-#))
+    var colors = lv.color_arr([primary_color, secondary_color, color_scr, color_text, color_card, color_grey])
+                               # ,color_reset, color_reset_hover, color_save, color_save_hover
+                              
     
     var th2 = lv.theme_haspmota_init(0, colors,
                                      self.r12, self.r16, self.r24)
@@ -3582,7 +3648,17 @@ class HASPmota
         end
       end
 
-      # Step 3.d. if not found, try to load a module with the name of the class
+      # Step 3.d. if not found, try `lv.<name>` as direct mapping of LVGL class
+      if obj_class == nil
+        # if not found, check if a LVGL class with name `lv.<name>` exists
+        var lv_cl = introspect.get(lv, obj_type)
+        if (lv_cl != nil) && (type(lv_cl) == 'class')
+          lv_instance = lv_cl(parent_lvgl)
+          obj_class = self.lvh_obj           # use the basic lvh_obj component to encapsulate
+        end
+      end
+
+      # Step 3.e. if not found, try to load a module with the name of the class
       if obj_class == nil
         var lv_cl = introspect.module(obj_type)
         if lv_cl != nil && type(lv_cl) == 'class'

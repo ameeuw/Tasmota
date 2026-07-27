@@ -19,6 +19,8 @@
   --------------------------------------------------------------------------------------------
   Version yyyymmdd  Action    Description
   --------------------------------------------------------------------------------------------
+  1.0.1.1 20251204  changed - display RSSI in general format "xx% (-yy dBm)"
+                              view on UI only when BLE enabled
   1.0.1.0 20240113  publish - Add some values to WebUI; code cleanup
   1.0.0.0 20210910  publish - renamed to xdrv_85, and checked with TAS latest dev branch
   0.0.0.0 20201213  created - initial version
@@ -289,8 +291,8 @@ char *topicPrefix(int prefix, const uint8_t *addr, int useAlias){
   const char *id = addrStr(addr, useAlias);
   if (!EQ3TopicStyle){
     GetTopic_P(stopic, prefix, TasmotaGlobal.mqtt_topic, PSTR(""));
-    strcat(stopic, PSTR("EQ3/"));
-    strcat(stopic, id);
+    strlcat(stopic, PSTR("EQ3/"), sizeof(stopic));
+    strlcat(stopic, id, sizeof(stopic));
   } else {
     char p[] = "EQ3";
     GetTopic_P(stopic, prefix, p, id);
@@ -459,7 +461,7 @@ int EQ3ParseOp(BLE_ESP32::generic_sensor_t *op, bool success, int retries){
   if ((statlen >= 6) && (status[0] == 2) && (status[1] == 1)) {
     ResponseAppend_P(PSTR(",\"stattime\":%u"), stattime);
     eq3->TargetTemp = (float)status[5] / 2;
-    ResponseAppend_P(PSTR(",\"temp\":%2.1f"), eq3->TargetTemp);
+    ResponseAppend_P(PSTR(",\"temp\":%1_f"), &(eq3->TargetTemp));
     eq3->DutyCycle = status[3];
     ResponseAppend_P(PSTR(",\"posn\":%d"), eq3->DutyCycle);
     int stat = status[2];
@@ -516,11 +518,16 @@ int EQ3ParseOp(BLE_ESP32::generic_sensor_t *op, bool success, int retries){
       );
 
     if (statlen >= 15) {
-      ResponseAppend_P(PSTR(",\"windowtemp\":%2.1f"), ((float)status[10]) /  2);
+      float f_temp;
+      f_temp = ((float)status[10]) /  2;
+      ResponseAppend_P(PSTR(",\"windowtemp\":%1_f"), &f_temp);
       ResponseAppend_P(PSTR(",\"windowdur\":%d"), ((int)status[11]) * 5);
-      ResponseAppend_P(PSTR(",\"day\":%2.1f"), ((float)status[12]) / 2);
-      ResponseAppend_P(PSTR(",\"night\":%2.1f"), ((float)status[13]) / 2);
-      ResponseAppend_P(PSTR(",\"offset\":%2.1f"), ((float)status[14] - 7) / 2);
+      f_temp = ((float)status[12]) / 2;
+      ResponseAppend_P(PSTR(",\"day\":%1_f"), &f_temp);
+      f_temp = ((float)status[13]) / 2;
+      ResponseAppend_P(PSTR(",\"night\":%1_f"), &f_temp);
+      f_temp = ((float)status[14] - 7) / 2;
+      ResponseAppend_P(PSTR(",\"offset\":%1_f"), &f_temp);
     }
 
   }
@@ -552,7 +559,7 @@ int EQ3ParseOp(BLE_ESP32::generic_sensor_t *op, bool success, int retries){
         mm *= 10;
         int hh = mm / 60;
         mm = mm % 60;
-        ResponseAppend_P(PSTR("%2.1f-%02d:%02d"), t, hh, mm);
+        ResponseAppend_P(PSTR("%1_f-%02d:%02d"), &t, hh, mm);
         // stop if the last one is 24.
         if (hh == 24){
           break;
@@ -982,8 +989,8 @@ int EQ3SendResult(char *requested, const char *result){
   Response_P(PSTR("{\"result\":\"%s\"}"), result);
   static char stopic[TOPSZ];
   GetTopic_P(stopic, STAT, TasmotaGlobal.mqtt_topic, PSTR(""));
-  strcat(stopic, PSTR("EQ3/"));
-  strcat(stopic, requested);
+  strlcat(stopic, PSTR("EQ3/"), sizeof(stopic));
+  strlcat(stopic, requested, sizeof(stopic));
   MqttPublish(stopic, false);
   return 0;
 }
@@ -991,13 +998,15 @@ int EQ3SendResult(char *requested, const char *result){
 #ifdef USE_WEBSERVER
 const char HTTP_EQ3_TYPE[]         PROGMEM = "{s}%s " D_NEOPOOL_TYPE "{m}EQ3{e}";
 const char HTTP_EQ3_MAC[]          PROGMEM = "{s}%s " D_MAC_ADDRESS "{m}%s{e}";
-const char HTTP_EQ3_RSSI[]         PROGMEM = "{s}%s " D_RSSI "{m}%d dBm{e}";
+const char HTTP_EQ3_RSSI[]         PROGMEM = "{s}%s " D_RSSI "{m}%d%% (%d dBm){e}";
 const char HTTP_EQ3_TEMPERATURE[]  PROGMEM = "{s}%s " D_THERMOSTAT_SET_POINT "{m}%*_f " D_UNIT_DEGREE "%c{e}";
 const char HTTP_EQ3_DUTY_CYCLE[]   PROGMEM = "{s}%s " D_THERMOSTAT_VALVE_POSITION "{m}%d " D_UNIT_PERCENT "{e}";
 const char HTTP_EQ3_BATTERY[]      PROGMEM = "{s}%s " D_BATTERY "{m}%s{e}";
 
 void EQ3Show(void)
 {
+  if (!Settings->flag5.mi32_enable) return;
+
   char c_unit = D_UNIT_CELSIUS[0]; // ToDo: Check if fahrenheit is possible -> temp_format==TEMP_CELSIUS ? D_UNIT_CELSIUS[0] : D_UNIT_FAHRENHEIT[0];
   bool FirstSensorShown = false;
 
@@ -1016,7 +1025,7 @@ void EQ3Show(void)
         label = tlabel;
       }
       WSContentSend_P(HTTP_EQ3_MAC, label, addrStr(EQ3Devices[i].addr));
-      WSContentSend_PD(HTTP_EQ3_RSSI, label, EQ3Devices[i].RSSI);
+      WSContentSend_PD(HTTP_EQ3_RSSI, label, WifiGetRssiAsQuality(EQ3Devices[i].RSSI), EQ3Devices[i].RSSI);
       WSContentSend_PD(HTTP_EQ3_TEMPERATURE, label, Settings->flag2.temperature_resolution, &EQ3Devices[i].TargetTemp, c_unit);
       WSContentSend_P(HTTP_EQ3_DUTY_CYCLE, label, EQ3Devices[i].DutyCycle);
       WSContentSend_P(HTTP_EQ3_BATTERY, label, EQ3Devices[i].Battery ? D_NEOPOOL_LOW : D_OK);

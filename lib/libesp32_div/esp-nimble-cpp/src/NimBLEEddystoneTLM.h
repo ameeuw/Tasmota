@@ -18,11 +18,12 @@
 #ifndef NIMBLE_CPP_EDDYSTONETLM_H_
 #define NIMBLE_CPP_EDDYSTONETLM_H_
 
-#include "nimconfig.h"
-#if CONFIG_BT_ENABLED && CONFIG_BT_NIMBLE_ROLE_BROADCASTER
+#include "syscfg/syscfg.h"
+#if CONFIG_BT_NIMBLE_ENABLED && MYNEWT_VAL(BLE_ROLE_BROADCASTER)
 
 class NimBLEUUID;
 
+# include <cstdint>
 # include <string>
 
 # define EDDYSTONE_TLM_FRAME_TYPE 0x20
@@ -66,5 +67,5 @@ class NimBLEEddystoneTLM {
 
 }; // NimBLEEddystoneTLM
 
-#endif // CONFIG_BT_ENABLED && CONFIG_BT_NIMBLE_ROLE_BROADCASTER
+#endif // CONFIG_BT_NIMBLE_ENABLED && MYNEWT_VAL(BLE_ROLE_BROADCASTER)
 #endif // NIMBLE_CPP_EDDYSTONETLM_H_

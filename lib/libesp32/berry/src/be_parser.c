@@ -73,7 +73,16 @@ typedef struct {
     bfuncinfo *finfo;
     bclosure *cl;
     bbyte islocal;
+    bbyte depth;  /* recursion depth for expr/block; bounded by BE_MAX_PARSER_DEPTH (must fit in bbyte) */
 } bparser;
+
+#define enter_recursion(parser) do { \
+    if (++(parser)->depth > BE_MAX_PARSER_DEPTH) { \
+        push_error((parser), "expression or block too deeply nested"); \
+    } \
+} while (0)
+
+#define leave_recursion(parser)  (--(parser)->depth)
 
 #if BE_USE_SCRIPT_COMPILER
 
@@ -250,8 +259,10 @@ static void begin_func(bparser *parser, bfuncinfo *finfo, bblockinfo *binfo)
     proto->code = be_vector_data(&finfo->code);
     proto->codesize = be_vector_capacity(&finfo->code);
     be_vector_init(vm, &finfo->kvec, sizeof(bvalue)); /* vector for constants */
+#if !BE_USE_COMPACT_KTAB
     proto->ktab = be_vector_data(&finfo->kvec);
     proto->nconst = be_vector_capacity(&finfo->kvec);
+#endif
     be_vector_init(vm, &finfo->pvec, sizeof(bproto*)); /* vector for subprotos */
     proto->ptab = be_vector_data(&finfo->pvec);
     proto->nproto = be_vector_capacity(&finfo->pvec);
@@ -322,13 +333,29 @@ static void end_func(bparser *parser)
     setupvals(finfo); /* close upvals */
     proto->code = be_vector_release(vm, &finfo->code); /* compact all vectors and return NULL if empty */
     proto->codesize = finfo->pc;
+#if BE_USE_COMPACT_KTAB
+    {   /* build the compact constant table from the scratch bvalue vector */
+        bvalue *kdata = be_vector_release(vm, &finfo->kvec);
+        int nconst = be_vector_count(&finfo->kvec);
+        /* keep the released bvalue[] visible to the GC (ktype==NULL sentinel)
+         * while be_proto_set_ktab allocates the compact block (which may GC) */
+        proto->kval = (union bvaldata*) kdata;
+        proto->ktype = NULL;
+        proto->nconst = (int16_t)nconst;
+        be_proto_set_ktab(vm, proto, kdata, nconst);
+        if (kdata) { be_free(vm, kdata, nconst * sizeof(bvalue)); }
+    }
+#else
     proto->ktab = be_vector_release(vm, &finfo->kvec);
     proto->nconst = be_vector_count(&finfo->kvec);
+#endif
     proto->ptab = be_vector_release(vm, &finfo->pvec);
     proto->nproto = be_vector_count(&finfo->pvec);
 #if BE_USE_MEM_ALIGNED
     proto->code = be_move_to_aligned(vm, proto->code, proto->codesize * sizeof(binstruction));     /* move `code` to 4-bytes aligned memory region */
+#if !BE_USE_COMPACT_KTAB
     proto->ktab = be_move_to_aligned(vm, proto->ktab, proto->nconst * sizeof(bvalue));     /* move `ktab` to 4-bytes aligned memory region */
+#endif
 #endif /* BE_USE_MEM_ALIGNED */
 #if BE_DEBUG_RUNTIME_INFO
     proto->lineinfo = be_vector_release(vm, &finfo->linevec);     /* move `lineinfo` to 4-bytes aligned memory region */
@@ -502,7 +529,7 @@ static void new_var(bparser *parser, bstring *name, bexpdesc *var)
             init_exp(&key, ETSTRING, 0);
             key.v.s = name;
             init_exp(var, ETNGLOBAL, 0);
-            var->v.idx = be_code_nglobal(parser->finfo, &key);
+            var->v.idx = be_code_resolve(parser->finfo, &key);
         }
     }
 }
@@ -564,7 +591,7 @@ static void singlevar(bparser *parser, bexpdesc *var)
         init_exp(&key, ETSTRING, 0);
         key.v.s = varname;
         init_exp(var, ETNGLOBAL, 0);
-        var->v.idx = be_code_nglobal(parser->finfo, &key);
+        var->v.idx = be_code_resolve(parser->finfo, &key);
         break;
     default:
         break;
@@ -595,7 +622,12 @@ static void func_varlist(bparser *parser)
     /* '(' [ ID {',' ID}] ')' or */
     /* '(' '*' ID ')' or */
     /* '(' [ ID {',' ID}] ',' '*' ID ')' */
-    match_token(parser, OptLBK); /* skip '(' */
+    btokentype type_lbk = next_type(parser);
+    if ((type_lbk == OptSpaceLBK) || (type_lbk == OptCallLBK)) {
+        match_token(parser, type_lbk); /* skip '(' */
+    } else {
+        match_token(parser, OptCallLBK); /* raise error */
+    }
     if (next_type(parser) == OptMul) {
         func_vararg(parser);
     } else if (match_id(parser, str) != NULL) {
@@ -837,8 +869,8 @@ static void member_expr(bparser *parser, bexpdesc *e)
         init_exp(&key, ETSTRING, 0);
         key.v.s = str;
         be_code_member(parser->finfo, e, &key);
-    } else if (next_type(parser) == OptLBK) {
-        scan_next_token(parser); /* skip '(' */
+    } else if (next_type(parser) == OptCallLBK) {
+        scan_next_token(parser); /* skip '(' - must be no space before */
         bexpdesc key;
         expr(parser, &key);
         check_var(parser, &key);
@@ -897,7 +929,8 @@ static void simple_expr(bparser *parser, bexpdesc *e)
 static void primary_expr(bparser *parser, bexpdesc *e)
 {
     switch (next_type(parser)) {
-    case OptLBK: /* '(' expr ')' */
+    case OptSpaceLBK: /* '(' expr ')' - grouping parentheses only */
+    case OptCallLBK:  /* '(' expr ')' - following a symbol */
         scan_next_token(parser); /* skip '(' */
         expr(parser, e);
         check_var(parser, e);
@@ -926,7 +959,7 @@ static void suffix_expr(bparser *parser, bexpdesc *e)
     primary_expr(parser, e);
     for (;;) {
         switch (next_type(parser)) {
-        case OptLBK: /* '(' function call */
+        case OptCallLBK: /* '(' function call - no space before */
             call_expr(parser, e);
             break;
         case OptDot: /* '.' member */
@@ -1026,15 +1059,18 @@ static void assign_expr(bparser *parser)
             parser_error(parser,
                 "try to assign constant expressions.");
         }
-    } else if (e.type >= ETMEMBER) {
-        bfuncinfo *finfo = parser->finfo;
-        /* these expressions occupy a register and need to be freed */
-        finfo->freereg = (bbyte)be_list_count(finfo->local);
-    } else if (e.type == ETVOID) { /* not assign expression */
-        /* undeclared symbol */
-        parser->lexer.linenumber = line;
-        check_var(parser, &e);
-    } 
+    } else {
+        be_code_resolve(parser->finfo, &e);
+        if (e.type >= ETMEMBER) {
+            bfuncinfo *finfo = parser->finfo;
+            /* these expressions occupy a register and need to be freed */
+            finfo->freereg = (bbyte)be_list_count(finfo->local);
+        } else if (e.type == ETVOID) { /* not assign expression */
+            /* undeclared symbol */
+            parser->lexer.linenumber = line;
+            check_var(parser, &e);
+        }
+    }
 }
 
 /* conditional expression */
@@ -1069,7 +1105,9 @@ static void cond_expr(bparser *parser, bexpdesc *e)
 static void sub_expr(bparser *parser, bexpdesc *e, int prio)
 {
     bfuncinfo *finfo = parser->finfo;
-    btokentype op = get_unary_op(parser);  /* check if first token in unary op */
+    btokentype op;
+    enter_recursion(parser);
+    op = get_unary_op(parser);  /* check if first token in unary op */
     if (op != OP_NOT_UNARY) {  /* unary op found */
         int line, res;
         scan_next_token(parser);  /* move to next token */
@@ -1107,6 +1145,7 @@ static void sub_expr(bparser *parser, bexpdesc *e, int prio)
     if (prio == ASSIGN_OP_PRIO) {
         cond_expr(parser, e);
     }
+    leave_recursion(parser);
 }
 
 static void walrus_expr(bparser *parser, bexpdesc *e)
@@ -1352,7 +1391,7 @@ static void continue_stmt(bparser *parser)
 static bbool isoverloadable(btokentype type)
 {
     return (type >= OptAdd && type <= OptConnect) /* overloaded binary operator */
-        || type == OptFlip || type == OptLBK;     /* '~' and '()' operator */
+        || type == OptFlip || type == OptSpaceLBK;     /* '~' and '()' operator */
 }
 
 static bstring* func_name(bparser* parser, bexpdesc* e, int ismethod)
@@ -1373,7 +1412,7 @@ static bstring* func_name(bparser* parser, bexpdesc* e, int ismethod)
             return parser_newstr(parser, "-*");
         }
         /* '()' call operator */
-        if (type == OptLBK && next_type(parser) == OptRBK) {
+        if ((type == OptSpaceLBK) && next_type(parser) == OptRBK) {
             scan_next_token(parser); /* skip ')' */
             return parser_newstr(parser, "()");
         }
@@ -1798,9 +1837,11 @@ static void stmtlist(bparser *parser)
 static void block(bparser *parser, int type)
 {
     bblockinfo binfo;
+    enter_recursion(parser);
     begin_block(parser->finfo, &binfo, type);
     stmtlist(parser);
     end_block(parser);
+    leave_recursion(parser);
 }
 
 static void mainfunc(bparser *parser, bclosure *cl)
@@ -1826,6 +1867,7 @@ bclosure* be_parser_source(bvm *vm,
     parser.finfo = NULL;
     parser.cl = cl;
     parser.islocal = (bbyte)islocal;
+    parser.depth = 0;
     var_setclosure(vm->top, cl);
     be_stackpush(vm);
     be_lexer_init(&parser.lexer, vm, fname, reader, data);

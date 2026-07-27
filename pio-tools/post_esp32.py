@@ -23,11 +23,14 @@
 from genericpath import exists
 import os
 from os.path import join, getsize
+import re
 import csv
+from littlefs import LittleFS
 import requests
 import shutil
 import subprocess
 import codecs
+from pathlib import Path
 from colorama import Fore
 from SCons.Script import COMMAND_LINE_TARGETS
 
@@ -134,33 +137,86 @@ def esp32_build_filesystem(fs_size):
         os.makedirs(filesystem_dir)
     if num_entries > 1:
         print()
-        print(Fore.GREEN + "Will create filesystem with the following files:")
+        print(Fore.GREEN + "Will create filesystem with the following file(s):")
         print()
     for file in files:
+        # Remove leading and trailing whitespace, ignore empty lines
+        file = file.strip()
+        if not file:
+            continue
+
         if "no_files" in file:
             continue
-        if "http" and "://" in file:
+        # Remote URL
+        if file.startswith(("http://", "https://")):
             response = requests.get(file.split(" ")[0])
             if response.ok:
                 target = os.path.normpath(join(filesystem_dir, file.split(os.path.sep)[-1]))
                 if len(file.split(" ")) > 1:
                     target = os.path.normpath(join(filesystem_dir, file.split(" ")[1]))
                     print("Renaming",(file.split(os.path.sep)[-1]).split(" ")[0],"to",file.split(" ")[1])
+                else:
+                    print(file.split(os.path.sep)[-1])
                 open(target, "wb").write(response.content)
             else:
                 print(Fore.RED + "Failed to download: ",file)
             continue
+        # Local path (relative to PROJECT_DIR or absolute)
+        file = file if os.path.isabs(file) else os.path.normpath(join(env.subst("$PROJECT_DIR"), file))
         if os.path.isdir(file):
+            print(f"{file}/ (directory)")
             shutil.copytree(file, filesystem_dir, dirs_exist_ok=True)
         else:
+            print(file)
             shutil.copy(file, filesystem_dir)
     if not os.listdir(filesystem_dir):
         #print("No files added -> will NOT create littlefs.bin and NOT overwrite fs partition!")
         return False
-    tool = env.subst(env["MKFSTOOL"])
-    cmd = (tool,"-c",filesystem_dir,"-s",fs_size,join(env.subst("$BUILD_DIR"),"littlefs.bin"))
-    returncode = subprocess.call(cmd, shell=False)
-    # print(returncode)
+    
+    # Use littlefs-python
+    output_file = join(env.subst("$BUILD_DIR"), "littlefs.bin")
+
+    # Parse fs_size (can be hex string like "0x2f0000")
+    if isinstance(fs_size, str):
+        if fs_size.startswith("0x"):
+            fs_size_bytes = int(fs_size, 16)
+        else:
+            fs_size_bytes = int(fs_size)
+    else:
+        fs_size_bytes = int(fs_size)
+    
+    # LittleFS parameters for ESP32
+    block_size = 4096
+    block_count = fs_size_bytes // block_size
+    
+    # Create LittleFS instance with disk version 2.0 for Tasmota
+    fs = LittleFS(
+        block_size=block_size,
+        block_count=block_count,
+        disk_version=0x00020000,
+        mount=True
+    )
+    
+    # Add all files from filesystem_dir
+    source_path = Path(filesystem_dir)
+    for item in source_path.rglob("*"):
+        rel_path = item.relative_to(source_path)
+        if item.is_dir():
+            fs.makedirs(rel_path.as_posix(), exist_ok=True)
+        else:
+            # Ensure parent directories exist
+            if rel_path.parent != Path("."):
+                fs.makedirs(rel_path.parent.as_posix(), exist_ok=True)
+            # Copy file
+            with fs.open(rel_path.as_posix(), "wb") as dest:
+                dest.write(item.read_bytes())
+    
+    # Write filesystem image
+    with open(output_file, "wb") as f:
+        f.write(fs.context.buffer)
+    
+    print()
+    print(Fore.GREEN + f"LittleFS image created: {output_file}")
     return True
 
 def esp32_fetch_safeboot_bin(tasmota_platform):
@@ -260,13 +316,22 @@ def esp32_create_combined_bin(source, target, env):
             "--flash-size",
             flash_size,
         ]
-        # platformio estimates the flash space used to store the firmware.
-        # the estimation is inaccurate. perform a final check on the firmware
-        # size by comparing it against the partition size.
+        # Platformio estimates the flash space used to store the firmware.
+        # The estimation is inaccurate. Get the exact firmware flash usage
+        # from the size tool (same value as PlatformIO's "Flash:" line)
         max_size = env.BoardConfig().get("upload.maximum_size", 1)
-        fw_size = getsize(firmware_name)
+        elf_file = os.path.normpath(env.subst("$BUILD_DIR/${PROGNAME}.elf"))
+        fw_size = 0
+        size_cmd = env.subst("$SIZETOOL") + " -A -d " + elf_file
+        size_output = subprocess.check_output(size_cmd, shell=True, text=True)
+        size_regexp = re.compile(env.get("SIZEPROGREGEXP"))
+        for line in size_output.splitlines():
+            m = size_regexp.match(line)
+            if m:
+                fw_size += int(m.group(1))
         if (fw_size > max_size):
-            raise Exception(Fore.RED + "firmware binary too large: %d > %d" % (fw_size, max_size))
+            print(Fore.RED + "firmware binary too large: %d > %d" % (fw_size, max_size))
+            exit(1)
 
         print()
         print("    Offset   | File")

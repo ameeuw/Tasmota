@@ -130,9 +130,11 @@ class Matter_IM_Message
     var data_raw = self.data.to_TLV().tlv2raw()    # payload in cleartext
     resp.encode_frame(data_raw)    # payload in cleartext
     resp.encrypt()
+#if USE_BERRY_DEBUG
     if tasmota.loglevel(4)
       log(f"MTR: <snd       ({resp.session.local_session_id:6i}) id={resp.message_counter} exch={resp.exchange_id} rack={resp.ack_message_counter}", 4)
     end
+#endif
     responder.send_response_frame(resp)
     self.last_counter = resp.message_counter
     self.finishing = true              # we wait for final ack
@@ -391,7 +393,7 @@ class Matter_IM_ReportData_Pull : Matter_IM_Message
     end
     # InteractionModelRevision
     raw.add(0x24FF, -2)               # add 24FF
-    raw.add(0x01, 1)                  # add 01
+    raw.add(0x0C, 1)                    # add 0C - InteractionModelRevision 12 (Matter 1.4+)
     # close struct ReportDataMessage
     raw.add(0x18, 1)                  # add 18
     # log(f">>>: {raw.tohex()}", 3)
@@ -529,9 +531,11 @@ class Matter_IM_ReportDataSubscribed_Pull : Matter_IM_ReportData_Pull
         var resp = self.resp.build_standalone_ack(false)
         resp.encode_frame()
         resp.encrypt()
+#if USE_BERRY_DEBUG
         if tasmota.loglevel(4)
           log(format("MTR: <Ack       (%6i) ack=%i id=%i", resp.session.local_session_id, resp.ack_message_counter, resp.message_counter), 4)
         end
+#endif
         responder.send_response_frame(resp)
         self.last_counter = resp.message_counter
         # self.finished = true

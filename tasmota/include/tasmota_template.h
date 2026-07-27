@@ -37,7 +37,7 @@ enum UserSelectablePins {
   GPIO_SPI_MISO, GPIO_SPI_MOSI, GPIO_SPI_CLK, GPIO_SPI_CS, GPIO_SPI_DC,        // Hardware SPI
   GPIO_SSPI_MISO, GPIO_SSPI_MOSI, GPIO_SSPI_SCLK, GPIO_SSPI_CS, GPIO_SSPI_DC,  // Software SPI
   GPIO_BACKLIGHT,                      // Display backlight control
-  GPIO_OLED_RESET,                     // OLED Display Reset
+  GPIO_DISPLAY_RESET,                  // Display Reset (renamed from OLED_RESET)
   GPIO_IRSEND, GPIO_IRRECV,            // IR interface
   GPIO_RFSEND, GPIO_RFRECV,            // RF interface
   GPIO_DHT11, GPIO_DHT22, GPIO_SI7021, GPIO_DHT11_OUT,  // DHT11, DHT21, DHT22, AM2301, AM2302, AM2321
@@ -235,6 +235,13 @@ enum UserSelectablePins {
 #ifdef ESP32
   GPIO_HSDIO_CMD, GPIO_HSDIO_CLK, GPIO_HSDIO_RST, GPIO_HSDIO_D0, GPIO_HSDIO_D1, GPIO_HSDIO_D2, GPIO_HSDIO_D3, // Hosted MCU SDIO interface, including 1-bit and 4-bit modes
 #endif
+  GPIO_VID6608_F, GPIO_VID6608_CW,      // VID6608
+  GPIO_MKSKYBLU_TX, GPIO_MKSKYBLU_RX,   // MakeSkyBlue solar charge controller
+  GPIO_MBS_RX_ENA,                      // Modbus Bridge Serial Receive Enable
+#ifdef USE_MODBUS_RELAY                    // Modbus RTU Relay modules
+  GPIO_MODBUSRELAY_TX, GPIO_MODBUSRELAY_TX_ENA,
+  GPIO_MODBUSRELAY_RX, GPIO_MODBUSRELAY_RX_ENA,
+#endif                      
   GPIO_SENSOR_END };
 
 // Error as warning to rethink GPIO usage with max 2045
@@ -512,17 +519,15 @@ const char kSensorNames[] PROGMEM =
 #ifdef ESP32
   D_SENSOR_HSDIO_CMD "|" D_SENSOR_HSDIO_CLK "|" D_SENSOR_HSDIO_RST "|" D_SENSOR_HSDIO_D0 "|" D_SENSOR_HSDIO_D1 "|" D_SENSOR_HSDIO_D2 "|" D_SENSOR_HSDIO_D3 "|"
 #endif
-  ;
+  D_VID6608_F "|" D_VID6608_CW "|"
+  D_SENSOR_MKSKYBLU_TX "|" D_SENSOR_MKSKYBLU_RX "|"
+  D_SENSOR_MBS_RX_ENA "|" D_MODBUSRELAY_TX "|" D_MODBUSRELAY_TX_ENA "|" D_MODBUSRELAY_RX "|" D_MODBUSRELAY_RX_ENA "|"
+;
 
 const char kSensorNamesFixed[] PROGMEM =
   D_SENSOR_USER;
 
 // Max number of GPIOs
-#define MAX_I2C                  1  // Display no index if one bus
-#ifdef USE_I2C_BUS2
-#undef MAX_I2C
-#define MAX_I2C                  2
-#endif
 #define MAX_MAX31855S            6
 #define MAX_MAX31865S            6
 #define MAX_MCP23XXX             6
@@ -541,6 +546,11 @@ const char kSensorNamesFixed[] PROGMEM =
 #define MAX_CSE7761              2  // Model 1/2 (DUALR3), 2/2 (POWCT)
 #define MAX_TWAI                 SOC_TWAI_CONTROLLER_NUM
 #define MAX_GPS_RX               3  // Baudrates 1 (9600), 2 (19200), 3 (38400)
+#ifdef ESP32
+#define MAX_MKSKYBLU_IF          8  // MakeSkyBlue solar charger: ESP32-NRG supports up to 8 phases
+#else
+#define MAX_MKSKYBLU_IF          3  // MakeSkyBlue solar charger: ESP82xx-NRG supports up to 3 phases
+#endif
 
 const uint16_t kGpioNiceList[] PROGMEM = {
   GPIO_NONE,                                     // Not used
@@ -647,7 +657,7 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_RC522_RST),                         // RC522 Rfid Reset
 #endif
 #ifdef USE_SDCARD
-  AGPIO(GPIO_SDCARD_CS),                         // SDCard in SPI mode
+  AGPIO(GPIO_SDCARD_CS) + AGMAX(MAX_SPI),        // SDCard in SPI mode
 #endif  // USE_SDCARD
 #if defined(USE_MCP2515) || defined(USE_CANSNIFFER)
   AGPIO(GPIO_MCP2515_CS),
@@ -750,7 +760,7 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_TM1640DIN),
 #endif  // USE_DISPLAY_TM1640
   AGPIO(GPIO_BACKLIGHT),                         // Display backlight control
-  AGPIO(GPIO_OLED_RESET),                        // OLED Display Reset
+  AGPIO(GPIO_DISPLAY_RESET),                     // Display Reset (renamed from OLED_RESET)
 #ifdef ESP32
   AGPIO(GPIO_EPD_DATA),                          // Base connection EPD driver
 #endif
@@ -1016,6 +1026,10 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_V9240_TX),                          //  Serial V9240 interface
   AGPIO(GPIO_V9240_RX),                          //  Serial V9240 interface
 #endif
+#ifdef USE_MAKE_SKY_BLUE
+  AGPIO(GPIO_MKSKYBLU_TX) + AGMAX(MAX_MKSKYBLU_IF),
+  AGPIO(GPIO_MKSKYBLU_RX) + AGMAX(MAX_MKSKYBLU_IF),
+#endif
 #endif  // USE_ENERGY_SENSOR
 
 /*-------------------------------------------------------------------------------------------*\
@@ -1029,6 +1043,7 @@ const uint16_t kGpioNiceList[] PROGMEM = {
 #ifdef USE_MODBUS_BRIDGE
   AGPIO(GPIO_MBR_TX_ENA),                        // Modbus Bridge Serial interface
   AGPIO(GPIO_MBR_TX),                            // Modbus Bridge Serial interface
+  AGPIO(GPIO_MBS_RX_ENA),                        // Modbus Bridge Serial interface
   AGPIO(GPIO_MBR_RX),                            // Modbus Bridge Serial interface
 #endif
 #ifdef USE_TCP_BRIDGE
@@ -1161,7 +1176,6 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_C8_CO2_5K_RX),                      // SC8-CO2-5K Serial interface
 #endif
 
-
 #ifdef ESP32
 #ifdef USE_ESP32_TWAI
 #if SOC_TWAI_SUPPORTED
@@ -1269,6 +1283,13 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_PIPSOLAR_RX),                       // pipsolar inverter Serial interface
 #endif
 
+#ifdef USE_MODBUS_RELAY
+  AGPIO(GPIO_MODBUSRELAY_TX),
+  AGPIO(GPIO_MODBUSRELAY_TX_ENA),
+  AGPIO(GPIO_MODBUSRELAY_RX),
+  AGPIO(GPIO_MODBUSRELAY_RX_ENA),
+#endif
+
 /*-------------------------------------------------------------------------------------------*\
  * ESP32 specifics
 \*-------------------------------------------------------------------------------------------*/
@@ -1293,7 +1314,11 @@ const uint16_t kGpioNiceList[] PROGMEM = {
 #endif  // USE_WEBCAM
 #ifdef USE_ETHERNET
   AGPIO(GPIO_ETH_PHY_POWER),
+#if CONFIG_SOC_SPI_PERIPH_NUM > 2                // This count differs from available usable SPI count based on SPIx_HOST
+  AGPIO(GPIO_ETH_PHY_MDC) + AGMAX(MAX_SPI),
+#else
   AGPIO(GPIO_ETH_PHY_MDC),
+#endif  // CONFIG_SOC_SPI_PERIPH_NUM > 2
   AGPIO(GPIO_ETH_PHY_MDIO),                      // Ethernet
 #endif  // USE_ETHERNET
 #ifdef USE_BIOPDU
@@ -1328,6 +1353,13 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_ADC_VOLTAGE) + AGMAX(MAX_ADCS),     // Voltage
   AGPIO(GPIO_ADC_CURRENT) + AGMAX(MAX_ADCS),     // Current
 #endif  // ESP32
+
+
+#ifdef USE_VID6608
+  AGPIO(GPIO_VID6608_F) + AGMAX(4),              // VID6608 step interface (max 4 motors)
+  AGPIO(GPIO_VID6608_CW) + AGMAX(4),             // VID6608 direction interface (max 4 motors)
+#endif
+
 };
 
 /*-------------------------------------------------------------------------------------------*\

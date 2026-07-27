@@ -158,6 +158,15 @@ i.e. the Bluetooth of the ESP can be shared without conflict.
 #include "NimBLEEddystoneTLM.h"
 #include "NimBLEBeacon.h"
 
+// The LOG_LEVEL macros are used to set the log level for the NimBLE stack, but they pollute the global namespace and would override the loglevel enum of Tasmota.
+// So we undefine them here to avoid conflicts.
+#undef LOG_LEVEL_DEBUG
+#undef LOG_LEVEL_INFO
+#undef LOG_LEVEL_WARN
+#undef LOG_LEVEL_ERROR
+#undef LOG_LEVEL_CRITICAL
+#undef LOG_LEVEL_NONE
+
 // assume this hack is still valid.
 #define DEPENDSONNIMBLEARDUINO 1
 #ifdef DEPENDSONNIMBLEARDUINO        
@@ -890,7 +899,7 @@ int getSeenDevicesToJson(char *dest, int maxlen){
 
   int len;
   if (!maxlen) return 0;
-  strcpy((dest), ",\"BLEDevices\":{");
+  strlcpy(dest, ",\"BLEDevices\":{", maxlen);
   len = strlen(dest);
   dest += len;
   maxlen -= len;
@@ -1188,12 +1197,12 @@ void setDetails(ble_advertisment_t *ad){
 
   *(p++) = '{';
   maxlen--;
-  strcpy(p, "\"DetailsBLE\":{");
+  strlcpy(p, "\"DetailsBLE\":{", maxlen);
   int len = strlen(p);
   p += len;
   maxlen -= len;
 
-  strcpy(p, "\"mac\":\"");
+  strlcpy(p, "\"mac\":\"", maxlen);
   len = strlen(p);
   p += len;
   maxlen -= len;
@@ -1209,11 +1218,11 @@ void setDetails(ble_advertisment_t *ad){
 
   const char *alias = BLE_ESP32::getAlias(ad->addr);
   if (alias && (*alias)){
-    strcpy(p, ",\"a\":\"");
+    strlcpy(p, ",\"a\":\"", maxlen);
     len = strlen(p);
     p += len;
     maxlen -= len;
-    strcpy(p, alias);
+    strlcpy(p, alias, maxlen);
     len = strlen(p);
     p += len;
     maxlen -= len;
@@ -1226,7 +1235,7 @@ void setDetails(ble_advertisment_t *ad){
 
   if (BLEAdvertismentDetailsJsonLost){
     BLEAdvertismentDetailsJsonLost = 0;
-    strcpy(p, ",\"lost\":true");
+    strlcpy(p, ",\"lost\":true", maxlen);
     len = strlen(p);
     p += len;
     maxlen -= len;
@@ -1237,7 +1246,7 @@ void setDetails(ble_advertisment_t *ad){
   const uint8_t* payload = advertisedDevice->getPayload().data();
   size_t payloadlen = advertisedDevice->getPayload().size();
   if (payloadlen  && (maxlen > 30)){ // will truncate if not enough space
-    strcpy(p, ",\"p\":\"");
+    strlcpy(p, ",\"p\":\"", maxlen);
     p += 6;
     maxlen -= 6;
     dump(p, maxlen-10, payload, payloadlen);
@@ -1268,7 +1277,7 @@ void setDetails(ble_advertisment_t *ad){
       if (maxlen -10 > svclen){
         *(p++) = ',';
         *(p++) = '\"';
-        strcpy(p, strUUID.c_str());
+        strlcpy(p, strUUID.c_str(), maxlen);
         p += strUUID.length();
         *(p++) = '\"';
         *(p++) = ':';
@@ -1367,7 +1376,7 @@ static BLESensorCallback clientCB;
 
 
 class BLEAdvCallbacks: public NimBLEScanCallbacks {
-  void onScanEnd(const NimBLEScanResults results) {
+  void onScanEnd(const NimBLEScanResults& results, int reason) {
     BLEscanEndedCB(results);
   }
 
@@ -2569,7 +2578,7 @@ int getAddr(uint8_t *dest, char *src){
   char tmp[12+5+1+2];
   int srclen = strlen(src);
   if ((srclen == 12+5) || (srclen == 12+5+2)){
-    strcpy(tmp, src);
+    strlcpy(tmp, src, sizeof(tmp));
     stripColon(tmp);
     src = tmp;
   }
@@ -3542,7 +3551,7 @@ std::string BLETriggerResponse(generic_sensor_t *toSend){
   if (toSend->readlen){
     dump(temp, 99, toSend->dataRead, toSend->readlen);
     if (toSend->readtruncated){
-      strcat(temp, "+");
+      strlcat(temp, "+", sizeof(temp));
     }
     out = out + ",\"read\":\"";
     out = out + temp;
@@ -3557,7 +3566,7 @@ std::string BLETriggerResponse(generic_sensor_t *toSend){
   if (toSend->notifylen){
     dump(temp, 99, toSend->dataNotify, toSend->notifylen);
     if (toSend->notifytruncated){
-      strcat(temp, "+");
+      strlcat(temp, "+", sizeof(temp));
     }
     out = out + ",\"notify\":\"";
     out = out + temp;
@@ -3571,12 +3580,10 @@ std::string BLETriggerResponse(generic_sensor_t *toSend){
 
 #define WEB_HANDLE_BLE "ble"
 
-const char HTTP_BTN_MENU_BLE[] PROGMEM =
-  "<p></p><form action='" WEB_HANDLE_BLE "' method='get'><button>" D_CONFIGURE_BLE "</button></form>";
+//const char HTTP_BTN_MENU_BLE[] PROGMEM =
+//  "<p></p><form action='" WEB_HANDLE_BLE "' method='get'><button>" D_CONFIGURE_BLE "</button></form>";
 
 const char HTTP_FORM_BLE[] PROGMEM =
-  "<fieldset><legend><b>&nbsp;" D_BLE_PARAMETERS "&nbsp;</b></legend>"
-  "<form method='get' action='" WEB_HANDLE_BLE "'>"
   "<p><label><input id='e0' type='checkbox'%s><b>" D_BLE_ENABLE "</b></label></p>"
   "<p><label><input id='e1' type='checkbox'%s><b>" D_BLE_ACTIVESCAN "</b></label></p>"
   "<p>" D_BLE_REMARK "</p>";
@@ -3584,7 +3591,7 @@ const char HTTP_FORM_BLE[] PROGMEM =
 
 const char HTTP_BLE_DEV_STYLE[] PROGMEM = "th, td { padding-left:5px; }";
 const char HTTP_BLE_DEV_START[] PROGMEM =
-  "<fieldset><legend><b>&nbsp;" D_BLE_DEVICES "&nbsp;</b></legend><table>"
+  "<table>"
   "<tr><th><label>mac(type)</label></th><th><label>alias</label></th><th><label>name</label></th><th><label>RSSI</label></th><th><label>Age(max)</label></th></tr>";
 const char HTTP_BLE_DEV[] PROGMEM =
   "<tr><td><label>%s(%d)</label></td><td><label>%s</label></td><td><label>%s</label></td><td><label>%d</label></td><td><label>%d(%d)</label></td></tr>";
@@ -3635,6 +3642,8 @@ void HandleBleConfiguration(void)
   WSContentStart_P(PSTR(D_CONFIGURE_BLE));
   WSContentSendStyle_P(HTTP_BLE_DEV_STYLE);
   //WSContentSendStyle();
+  WSContentSend_P(HTTP_FIELDSET_LEGEND, PSTR(D_BLE_PARAMETERS));
+  WSContentSend_P(HTTP_FORM_GET_ACTION, PSTR(WEB_HANDLE_BLE));
   WSContentSend_P(HTTP_FORM_BLE,
     (Settings->flag5.mi32_enable) ? " checked" : "",
     (BLEScanActiveMode) ? " checked" : ""
@@ -3646,6 +3655,7 @@ void HandleBleConfiguration(void)
     //TasAutoMutex localmutex(&BLEOperationsRecursiveMutex, "BLEConf");
     int number = seenDevices.size();
     if (number){
+      WSContentSend_P(HTTP_FIELDSET_LEGEND, PSTR(D_BLE_DEVICES));
       WSContentSend_P(HTTP_BLE_DEV_START);
       uint64_t now = esp_timer_get_time();
       now = now/1000L;
@@ -3741,7 +3751,8 @@ bool Xdrv79(uint32_t function)
 */
 #ifdef USE_WEBSERVER
     case FUNC_WEB_ADD_BUTTON:
-      WSContentSend_P(BLE_ESP32::HTTP_BTN_MENU_BLE);
+//      WSContentSend_P(BLE_ESP32::HTTP_BTN_MENU_BLE);
+      WSContentSend_P(HTTP_FORM_BUTTON, PSTR(WEB_HANDLE_BLE), PSTR(D_CONFIGURE_BLE));
       break;
     case FUNC_WEB_ADD_HANDLER:
       WebServer_on(PSTR("/" WEB_HANDLE_BLE), BLE_ESP32::HandleBleConfiguration);

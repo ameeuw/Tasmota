@@ -616,10 +616,9 @@ void SetPulseTimer(uint32_t index, uint32_t time)
 
 uint32_t GetPulseTimer(uint32_t index)
 {
-  long time = TimePassedSince(TasmotaGlobal.pulse_timer[index]);
-  if (time < 0) {
-    time *= -1;
-    return (time > 11100) ? (time / 1000) + 100 : (time > 0) ? time / 100 : 0;
+  int32_t time = -TimePassedSince(TasmotaGlobal.pulse_timer[index]);
+  if (TasmotaGlobal.pulse_timer[index] && time > 0) {
+      return (time > 11100) ? (time / 1000) + 100 : time / 100;
   }
   return 0;
 }
@@ -1127,6 +1126,12 @@ void MqttPublishTeleperiodSensor(void) {
 void PerformEverySecond(void)
 {
   TasmotaGlobal.uptime++;
+
+#ifdef ESP8266
+#ifdef USE_ESP8266_DEBUG_HEAP
+  ESP_HeapUsageUpdate();
+#endif  // USE_ESP8266_DEBUG_HEAP
+#endif  // ESP8266
 
   if (POWER_CYCLE_TIME == TasmotaGlobal.uptime) {
     UpdateQuickPowerCycle(false);
@@ -1834,6 +1839,17 @@ void SerialInput(void) {
 #endif  // ESP8266
 /*-------------------------------------------------------------------------------------------*/
 
+#ifdef USE_IMPROV
+    if (ImprovSerialInput(TasmotaGlobal.serial_in_buffer,
+                          TasmotaGlobal.serial_in_byte_counter,
+                          (char)TasmotaGlobal.serial_in_byte)) {
+      TasmotaGlobal.serial_in_byte_counter = 0;
+      continue;
+    }
+#endif  // USE_IMPROV
+
+/*-------------------------------------------------------------------------------------------*/
+
     if (XdrvCall(FUNC_SERIAL)) {
       TasmotaGlobal.serial_in_byte_counter = 0;
       Serial.flush();
@@ -1861,6 +1877,11 @@ void SerialInput(void) {
           serial_buffer_overrun = true;                                            // Signal overrun but continue reading input to flush until '\n' (EOL)
         }
       }
+#ifdef USE_SERIAL_BACKSPACE
+      else if (TasmotaGlobal.serial_in_byte == 0x08 && TasmotaGlobal.serial_in_byte_counter > 0) { // Backspace (BS) - remove last char from buffer
+        TasmotaGlobal.serial_in_byte_counter--;
+      }
+#endif  // USE_SERIAL_BACKSPACE
     } else {
       if (TasmotaGlobal.serial_in_byte || Settings->flag.mqtt_serial_raw) {        // Any char between 1 and 127 or any char (0 - 255) - CMND_SERIALSEND3
         bool in_byte_is_delimiter =                                                // Char is delimiter when...
@@ -1968,10 +1989,24 @@ void TasConsoleInput(void) {
     delay(0);
     char console_in_byte = TasConsole.read();
 
+#ifdef USE_IMPROV
+    if (ImprovSerialInput(console_buffer.c_str(),
+                          console_buffer.length(),
+                          console_in_byte)) {
+      console_buffer = "";
+      continue;
+    }
+#endif  // USE_IMPROV
+
 #ifdef USE_XYZMODEM
     if (XYZModemStart(TXMP_TASCONSOLE, console_in_byte)) { return; }
 #endif  // USE_XYZMODEM
 
+#ifdef USE_SERIAL_BACKSPACE
+    if (console_in_byte == 0x08 && console_buffer.length() > 0) { // Backspace (BS) - remove last char from buffer
+      console_buffer.remove(console_buffer.length() - 1);
+    } else
+#endif  // USE_SERIAL_BACKSPACE
     if (isprint(console_in_byte)) {                       // Any char between 32 and 127
       if (console_buffer.length() < INPUT_BUFFER_SIZE) {  // Add char to string if it still fits
         console_buffer += console_in_byte;
@@ -2284,40 +2319,11 @@ void GpioInit(void)
   }
 
 #ifdef USE_I2C
-/*
-  if (PinUsed(GPIO_I2C_SCL) && PinUsed(GPIO_I2C_SDA)) {
-    TasmotaGlobal.i2c_enabled[0] = I2cBegin(Pin(GPIO_I2C_SDA), Pin(GPIO_I2C_SCL));
-#ifdef ESP32
-    if (TasmotaGlobal.i2c_enabled[0]) {
-      AddLog(LOG_LEVEL_INFO, PSTR("I2C: Bus1 using GPIO%02d(SCL) and GPIO%02d(SDA)"), Pin(GPIO_I2C_SCL), Pin(GPIO_I2C_SDA));
-    }
-#endif
-  }
-#ifdef ESP32
-  if (PinUsed(GPIO_I2C_SCL, 1) && PinUsed(GPIO_I2C_SDA, 1)) {
-    TasmotaGlobal.i2c_enabled[1] = I2cBegin(Pin(GPIO_I2C_SDA, 1), Pin(GPIO_I2C_SCL, 1), 1);
-    if (TasmotaGlobal.i2c_enabled[1]) {
-      AddLog(LOG_LEVEL_INFO, PSTR("I2C: Bus2 using GPIO%02d(SCL) and GPIO%02d(SDA)"), Pin(GPIO_I2C_SCL, 1), Pin(GPIO_I2C_SDA, 1));
-    }
-  }
-#endif
-*/
-  uint32_t max_bus = 1;
-#ifdef USE_I2C_BUS2
-  max_bus = 2;
-#endif  // USE_I2C_BUS2
-  for (uint32_t bus = 0; bus < max_bus; bus++) {
+  for (uint32_t bus = 0; bus < MAX_I2C; bus++) {
     if (PinUsed(GPIO_I2C_SCL, bus) && PinUsed(GPIO_I2C_SDA, bus)) {
       if (I2cBegin(Pin(GPIO_I2C_SDA, bus), Pin(GPIO_I2C_SCL, bus), bus)) {
-        if (0 == bus) { 
-          TasmotaGlobal.i2c_enabled[0] = true;
-        }
-#ifdef USE_I2C_BUS2
-        else { 
-          TasmotaGlobal.i2c_enabled[1] = true;
-        }
+        TasmotaGlobal.i2c_enabled[bus] = true;
         AddLog(LOG_LEVEL_INFO, PSTR("I2C: Bus%d using GPIO%02d(SCL) and GPIO%02d(SDA)"), bus +1, Pin(GPIO_I2C_SCL, bus), Pin(GPIO_I2C_SDA, bus));
-#endif  // USE_I2C_BUS2
       }
     }
   }

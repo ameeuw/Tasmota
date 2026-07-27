@@ -20,11 +20,14 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#define MI32_VERSION "V0.9.2.6"
+#define MI32_VERSION "V0.9.2.7"
 /*
   --------------------------------------------------------------------------------------------
   Version yyyymmdd  Action    Description
   --------------------------------------------------------------------------------------------
+  0.9.2.7 20251204  changed - display RSSI in general format "xx% (-yy dBm)"
+                              view on UI only when BLE enabled
+  -------
   0.9.2.6 20250503  changed - display alias instead of type, when present
   -------
   0.9.2.5 20250319  changed - added support for MI LYWSD02MMC with different device ID
@@ -1863,13 +1866,13 @@ void MI32ParseMiScalePacket(const uint8_t * _buf, uint32_t length, const uint8_t
       MIBLEsensors[_slot].weight_removed = weight_removed;
 
       if (_packetV1->status & (1 << 0)) {
-        strcpy(MIBLEsensors[_slot].weight_unit, PSTR("lbs"));
+        strlcpy(MIBLEsensors[_slot].weight_unit, PSTR("lbs"), sizeof(MIBLEsensors[_slot].weight_unit));
         MIBLEsensors[_slot].weight = (float)_packetV1->weight / 100.0f;
       } else if(_packetV1->status & (1 << 4)) {
-        strcpy(MIBLEsensors[_slot].weight_unit, PSTR("jin"));
+        strlcpy(MIBLEsensors[_slot].weight_unit, PSTR("jin"), sizeof(MIBLEsensors[_slot].weight_unit));
         MIBLEsensors[_slot].weight = (float)_packetV1->weight / 100.0f;
       } else {
-        strcpy(MIBLEsensors[_slot].weight_unit, PSTR("kg"));
+        strlcpy(MIBLEsensors[_slot].weight_unit, PSTR("kg"), sizeof(MIBLEsensors[_slot].weight_unit));
         MIBLEsensors[_slot].weight = (float)_packetV1->weight / 200.0f;
       }
 
@@ -1903,16 +1906,16 @@ void MI32ParseMiScalePacket(const uint8_t * _buf, uint32_t length, const uint8_t
       MIBLEsensors[_slot].weight_removed = weight_removed;
 
       if (_packetV2->weight_unit & (1 << 4)) {
-        strcpy(MIBLEsensors[_slot].weight_unit, PSTR("jin"));
+        strlcpy(MIBLEsensors[_slot].weight_unit, PSTR("jin"), sizeof(MIBLEsensors[_slot].weight_unit));
         MIBLEsensors[_slot].weight = (float)_packetV2->weight / 100.0f;
       } else if(_packetV2->weight_unit == 3) {
-        strcpy(MIBLEsensors[_slot].weight_unit, PSTR("lbs"));
+        strlcpy(MIBLEsensors[_slot].weight_unit, PSTR("lbs"), sizeof(MIBLEsensors[_slot].weight_unit));
         MIBLEsensors[_slot].weight = (float)_packetV2->weight / 100.0f;
       } else if(_packetV2->weight_unit == 2) {
-        strcpy(MIBLEsensors[_slot].weight_unit, PSTR("kg"));
+        strlcpy(MIBLEsensors[_slot].weight_unit, PSTR("kg"), sizeof(MIBLEsensors[_slot].weight_unit));
         MIBLEsensors[_slot].weight = (float)_packetV2->weight / 200.0f;
       } else {
-        strcpy(MIBLEsensors[_slot].weight_unit, PSTR(""));
+        strlcpy(MIBLEsensors[_slot].weight_unit, PSTR(""), sizeof(MIBLEsensors[_slot].weight_unit));
         MIBLEsensors[_slot].weight = (float)_packetV2->weight / 100.0f;
       }
 
@@ -2384,7 +2387,7 @@ void MI32EverySecond(bool restart){
       MI32.secondsCounter = 0;
     }
   }
-  MI32.secondsCounter ++;
+  MI32.secondsCounter++;
 
   if (MI32.secondsCounter2 >= MI32.period){
     if (MI32.mqttCurrentSlot >= MIBLEsensors.size()){
@@ -2749,7 +2752,7 @@ void CmndMi32Keys(void){
 const char HTTP_MI32[] PROGMEM = "{s}MI ESP32 " MI32_VERSION "{m}%u%s / %u{e}";
 const char HTTP_MI32_TYPE[] PROGMEM = "{s}%s " D_SENSOR"{m}%s{e}";
 const char HTTP_MI32_MAC[] PROGMEM = "{s}%s " D_MAC_ADDRESS "{m}%s{e}";
-const char HTTP_MI32_RSSI[] PROGMEM = "{s}%s " D_RSSI "{m}%d dBm{e}";
+const char HTTP_MI32_RSSI[] PROGMEM = "{s}%s " D_RSSI "{m}%d%% (%d dBm){e}";
 const char HTTP_MI32_BATTERY[] PROGMEM = "{s}%s " D_BATTERY "{m}%u %%{e}";
 const char HTTP_MI32_LASTBUTTON[] PROGMEM = "{s}%s Last Button{m}%u{e}";
 const char HTTP_MI32_EVENTS[] PROGMEM = "{s}%s Events{m}%u{e}";
@@ -2763,19 +2766,9 @@ const char HTTP_MISCALE_IMPEDANCE[] PROGMEM = "{s}%s Impedance{m}%u{e}";
 const char HTTP_MISCALE_IMPEDANCE_STABILIZED[] PROGMEM = "{s}%s Impedance stabilized{m}%s{e}";
 const char HTTP_SJWS01LM_FLOODING[] PROGMEM = "{s}%s Flooding{m}%u{e}";
 
-//const char HTTP_NEEDKEY[] PROGMEM = "{s}%s <a target=\"_blank\" href=\""
-//  "https://atc1441.github.io/TelinkFlasher.html?mac=%s&cb=http%%3A%%2F%%2F%s%%2Fmikey"
-//  "\">%s</a>{m}{e}";
+const char HTTP_NEEDKEY[] PROGMEM = "{s}%s Key{m}<a target='_blank' href='https://tasmota.github.io/ble_key_extractor?mac=%s&cb=http%%3A%%2F%%2F%s%%2Fmikey'>%s</a>{e}";
 
-//const char HTTP_NEEDKEY[] PROGMEM = "{s}%s <a target=\"_blank\" href=\""
-//  "http://127.0.0.1:8887/keys/TelinkFlasher.html?mac=%s&cb=http%%3A%%2F%%2F%s%%2Fmikey"
-//  "\">%s</a>{m}{e}";
-const char HTTP_NEEDKEY[] PROGMEM = "{s}%s <a target=\"_blank\" href=\""
-  "https://tasmota.github.io/ble_key_extractor?mac=%s&cb=http%%3A%%2F%%2F%s%%2Fmikey"
-  "\">%s</a>{m}{e}";
-
-
-const char HTTP_PAIRING[] PROGMEM = "{s}%s Pair Button Pressed{m} {e}";
+const char HTTP_PAIRING[] PROGMEM = "{s}%s Pair button pressed{m} {e}";
 
 const char HTTP_KEY_ERROR[] PROGMEM = "Key error %s";
 const char HTTP_MAC_ERROR[] PROGMEM = "MAC error %s";
@@ -2812,7 +2805,7 @@ void HandleMI32Key(){
 
   WSContentSend_P(HTTP_KEY_ADDED, mac, key);
 
-  strcat(key, mac);
+  strlcat(key, mac, sizeof(key));
   MI32AddKey(key, nullptr);
 
 //  WSContentSpaceButton(BUTTON_CONFIGURATION);
@@ -3527,6 +3520,8 @@ void MI32Show(bool json)
 
 #ifdef USE_WEBSERVER
   } else {
+    if (!Settings->flag5.mi32_enable) return;
+
     static  uint16_t _page = 0;
     static  uint16_t _counter = 0;
     int32_t i = _page * MI32.perPage;
@@ -3559,7 +3554,7 @@ void MI32Show(bool json)
       char _MAC[18];
       ToHex_P(p->MAC,6,_MAC,18);//,':');
       WSContentSend_P(HTTP_MI32_MAC, label, _MAC);
-      WSContentSend_PD(HTTP_MI32_RSSI, label, p->RSSI);
+      WSContentSend_PD(HTTP_MI32_RSSI, label, WifiGetRssiAsQuality(p->RSSI), p->RSSI);
 
       // for some reason, display flora differently
       switch(p->type){
@@ -3584,30 +3579,30 @@ void MI32Show(bool json)
 #ifdef USE_MI_DECRYPTION
       bool showkey = false;
       char tmp[40];
-      strcpy(tmp, PSTR("KeyRqd"));
+      strlcpy(tmp, PSTR("KeyRqd"), sizeof(tmp));
       switch(p->needkey) {
         default:{
           snprintf(tmp, 39, PSTR("?%d?"), p->needkey );
           showkey = true;
         } break;
         case KEY_REQUIREMENT_UNKNOWN: {
-          strcpy(tmp, PSTR("WAIT"));
+          strlcpy(tmp, PSTR("WAIT"), sizeof(tmp));
           showkey = true;
         } break;
         case KEY_NOT_REQUIRED: {
-          strcpy(tmp, PSTR("NOTKEY"));
+          strlcpy(tmp, PSTR("NOTKEY"), sizeof(tmp));
           //showkey = true;
         } break;
         case KEY_REQUIRED_BUT_NOT_FOUND: {
-          strcpy(tmp, PSTR("NoKey"));
+          strlcpy(tmp, PSTR("NoKey"), sizeof(tmp));
           showkey = true;
         } break;
         case KEY_REQUIRED_AND_FOUND: {
-          strcpy(tmp, PSTR("KeyOk"));
+          strlcpy(tmp, PSTR("KeyOk"), sizeof(tmp));
           showkey = true;
         } break;
         case KEY_REQUIRED_AND_INVALID: {
-          strcpy(tmp, PSTR("KeyInv"));
+          strlcpy(tmp, PSTR("KeyInv"), sizeof(tmp));
           showkey = true;
         } break;
       }

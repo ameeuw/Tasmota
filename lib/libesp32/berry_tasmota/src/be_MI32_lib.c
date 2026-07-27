@@ -26,7 +26,7 @@ extern void be_MI32_set_temp(int slot, int temp_val);
 BE_FUNC_CTYPE_DECLARE(be_MI32_set_temp, "", "ii");
 
 extern bbool be_MI32_widget(const char *sbuf, void* function);
-BE_FUNC_CTYPE_DECLARE(be_MI32_widget, "b", "s[c]");
+BE_FUNC_CTYPE_DECLARE(be_MI32_widget, "b", "[sc]");
 
 #include "be_fixed_MI32.h"
 
@@ -64,14 +64,13 @@ BE_FUNC_CTYPE_DECLARE(be_BLE_reg_adv_cb, "", "c[c]");
 extern void be_BLE_reg_server_cb(void* function, uint8_t *buffer);
 BE_FUNC_CTYPE_DECLARE(be_BLE_reg_server_cb, "", "c[c]");
 
-extern void be_BLE_set_MAC(struct bvm *vm, uint8_t *buf, size_t size, uint8_t type);
-BE_FUNC_CTYPE_DECLARE(be_BLE_set_MAC, "", "@(bytes)~[i]");
+extern void be_BLE_set_MAC(struct bvm *vm, uint8_t *buf, size_t size, uint8_t type, uint32_t pin);
+BE_FUNC_CTYPE_DECLARE(be_BLE_set_MAC, "", "@(bytes)~[ii]");
 
 extern void be_BLE_set_characteristic(struct bvm *vm, const char *Chr);
 BE_FUNC_CTYPE_DECLARE(be_BLE_set_characteristic, "", "@s");
 
-extern void be_BLE_run(struct bvm *vm, uint8_t operation, bbool response, int32_t arg1);
-BE_FUNC_CTYPE_DECLARE(be_BLE_run, "", "@i[bi]");
+extern void be_BLE_run(struct bvm *vm);
 
 extern void be_BLE_store(uint8_t *buf, size_t size);
 BE_FUNC_CTYPE_DECLARE(be_BLE_store, "", "(bytes)~");
@@ -92,7 +91,7 @@ module BLE (scope: global) {
   info,       func(be_BLE_info)
   conn_cb,    ctype_func(be_BLE_reg_conn_cb)
   set_svc,    ctype_func(be_BLE_set_service)
-  run,        ctype_func(be_BLE_run)
+  run,        func(be_BLE_run)
   store,      ctype_func(be_BLE_store)
   set_chr,    ctype_func(be_BLE_set_characteristic)
   adv_cb,     ctype_func(be_BLE_reg_adv_cb)

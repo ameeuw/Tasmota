@@ -81,7 +81,7 @@ const uint8_t MAX_KNX_CB = 10;              // Max number of KNX Group Addresses
 const uint8_t MAX_XNRG_DRIVERS = 32;        // Max number of allowed energy drivers
 const uint8_t MAX_XDRV_DRIVERS = 128;       // Max number of allowed driver drivers
 const uint8_t MAX_XSNS_DRIVERS = 128;       // Max number of allowed sensor drivers
-const uint8_t MAX_I2C_DRIVERS = 96;         // Max number of allowed i2c drivers
+const uint8_t MAX_I2C_DRIVERS = 160;        // Max number of allowed i2c drivers
 const uint8_t MAX_SHUTTERS = 4;             // Max number of shutters
 const uint8_t MAX_SHUTTER_KEYS = 4;         // Max number of shutter keys or buttons
 const uint8_t MAX_PCF8574 = 4;              // Max number of PCF8574 devices
@@ -386,7 +386,19 @@ enum EmulationOptions {EMUL_NONE, EMUL_WEMO, EMUL_HUE, EMUL_MAX};
 
 enum TopicOptions { CMND, STAT, TELE, nu1, RESULT_OR_CMND, RESULT_OR_STAT, RESULT_OR_TELE };
 
-enum UploadTypes { UPL_TASMOTA = 1, UPL_SETTINGS, UPL_EFM8BB1, UPL_TASMOTACLIENT, UPL_EFR32, UPL_SHD, UPL_CCL, UPL_UFSFILE };
+// Upload type used by HandleUploadLoop() to route incoming data.
+// Value 0 is invalid/unset. Each upload endpoint must set the appropriate
+// type before HandleUploadLoop() processes the first data block.
+// UPL_NONE           - No valid type
+// UPL_TASMOTA        - OTA firmware update (/u2)
+// UPL_SETTINGS       - Settings backup restore (/u2)
+// UPL_EFM8BB1        - Sonoff RF bridge EFM8BB1 firmware
+// UPL_TASMOTACLIENT  - Tasmota client (Arduino) hex file
+// UPL_EFR32          - Zigbee EZSP (EFR32) firmware
+// UPL_SHD            - Shelly dimmer firmware
+// UPL_CCL            - CC2530 Zigbee firmware via CCLoader
+// UPL_UFSFILE        - Filesystem file upload (/ufsu)
+enum UploadTypes { UPL_NONE, UPL_TASMOTA, UPL_SETTINGS, UPL_EFM8BB1, UPL_TASMOTACLIENT, UPL_EFR32, UPL_SHD, UPL_CCL, UPL_UFSFILE };
 
 enum ExecuteCommandPowerOptions { POWER_OFF, POWER_ON, POWER_TOGGLE, POWER_BLINK, POWER_BLINK_STOP, POWER_OFF_FORCE,
                                   POWER_OFF_NO_STATE = 8, POWER_ON_NO_STATE, POWER_TOGGLE_NO_STATE,
@@ -430,7 +442,7 @@ enum Ws2812Color { WS_RED, WS_GREEN, WS_BLUE };
 
 enum LightSubtypes { LST_NONE, LST_SINGLE, LST_COLDWARM, LST_RGB,   LST_RGBW, LST_RGBCW, LST_MAX=5 };   // Do not insert new fields
 enum LightTypes    { LT_BASIC, LT_PWM1,    LT_PWM2,      LT_PWM3,   LT_PWM4,  LT_PWM5,  LT_PWM6, LT_PWM7,
-                     LT_NU8,   LT_SERIAL1, LT_SERIAL2,   LT_RGB,    LT_RGBW,  LT_RGBWC, LT_NU14, LT_NU15 };  // Do not insert new fields
+                     LT_NU8,   LT_W,       LT_CW,        LT_RGB,    LT_RGBW,  LT_RGBWC, LT_NU14, LT_NU15 };  // Do not insert new fields
 
 enum XsnsFunctions { FUNC_SETTINGS_OVERRIDE, FUNC_SETUP_RING1, FUNC_SETUP_RING2, FUNC_PRE_INIT, FUNC_INIT, FUNC_ACTIVE, FUNC_ABOUT_TO_RESTART,
                      FUNC_LOOP, FUNC_SLEEP_LOOP, FUNC_EVERY_50_MSECOND, FUNC_EVERY_100_MSECOND, FUNC_EVERY_200_MSECOND, FUNC_EVERY_250_MSECOND, FUNC_EVERY_SECOND,
@@ -496,6 +508,7 @@ enum SettingsTextIndex { SET_OTAURL,
                          SET_INFLUXDB_HOST, SET_INFLUXDB_PORT, SET_INFLUXDB_ORG, SET_INFLUXDB_TOKEN, SET_INFLUXDB_BUCKET, SET_INFLUXDB_RP,
                          SET_CANVAS,
                          SET_TELEGRAM_FINGERPRINT,
+                         SET_APBSSID1, SET_APBSSID2,  // MAX_SSIDS
                          SET_MAX, // limit of texts stored in Settings
                          // Index above are not stored in Settings and should be handled specifically in SettingText()
                          SET_BUTTON17, SET_BUTTON18, SET_BUTTON19, SET_BUTTON20, SET_BUTTON21, SET_BUTTON22, SET_BUTTON23, SET_BUTTON24,
